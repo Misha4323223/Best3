@@ -22,7 +22,7 @@ const chatRequestSchema = z.object({
 router.post('/smart', async (req: Request, res: Response) => {
   try {
     const { message, username, useCheckpoints } = chatRequestSchema.parse(req.body);
-    
+
     // Сохраняем чекпоинт входящего сообщения
     if (useCheckpoints) {
       await checkpointManager.saveCheckpoint(
@@ -41,8 +41,67 @@ router.post('/smart', async (req: Request, res: Response) => {
     }
 
     // Простой ответ (можно заменить на реальный AI провайдер)
-    let aiResponse = generateSmartResponse(message, username);
+    // let aiResponse = generateSmartResponse(message, username); // This will be assigned later
+
+    let messageContent = message;
+
+    // Проверяем, нужен ли SEO анализ
+    const seoAnalysisMatch = messageContent.match(/(?:проанализируй|анализ|анализируй|проверь|seo|сео).+?(?:сайт|site).+?(https?:\/\/[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+
+    if (seoAnalysisMatch) {
+      console.log('📊 [CHAT] Выполняем SEO анализ сайта');
+
+      try {
+        const { analyzeSiteComprehensive } = require('./seo-website-analyzer');
+        const url = seoAnalysisMatch[1];
+
+        const seoResult = await analyzeSiteComprehensive(url);
+
+        if (seoResult.success) {
+          console.log('✅ [CHAT] SEO анализ завершен успешно');
+
+          // Возвращаем форматированный отчет
+          res.json({
+            success: true,
+            response: seoResult.formattedReport,
+            provider: 'SEO Analyzer',
+            searchUsed: false,
+            seoAnalysisUsed: true,
+            seoData: seoResult.report
+          });
+          return;
+        } else {
+          console.log('❌ [CHAT] Ошибка SEO анализа, переходим к обычной обработке');
+          messageContent += `\n\nПримечание: Не удалось выполнить полный SEO анализ сайта (${seoResult.error}), но могу дать общие рекомендации.`;
+        }
+      } catch (error) {
+        console.error('❌ [CHAT] Ошибка SEO модуля:', error);
+        messageContent += '\n\nПримечание: SEO анализ временно недоступен, но могу дать общие рекомендации по оптимизации сайтов.';
+      }
+    }
+
+    const needsWebSearch = (msg: string) => msg.toLowerCase().includes('поиск');
+    const performWebSearch = async (query: string) => {
+      return { success: true, results: [] }; // Placeholder
+    };
+    const formatSearchResultsForAI = (results: any) => results.results.join('\n');
+    let searchUsed = false;
+
+    // Если это запрос на поиск, используем веб-поиск
+    if (needsWebSearch(messageContent)) {
+      console.log('🔍 [CHAT] Выполняем веб-поиск для запроса');
+
+      const searchResult = await performWebSearch(messageContent);
+      if (searchResult.success && searchResult.results.length > 0) {
+        const searchContext = formatSearchResultsForAI(searchResult);
+        messageContent = messageContent + '\n\n' + searchContext;
+        searchUsed = true;
+      }
+    }
     
+
+    let aiResponse = generateSmartResponse(messageContent, username);
+
     // Сохраняем чекпоинт ответа
     if (useCheckpoints) {
       await checkpointManager.saveCheckpoint(
@@ -75,7 +134,7 @@ router.post('/smart', async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('Ошибка обработки чата:', error);
-    
+
     // Сохраняем чекпоинт ошибки
     await checkpointManager.saveCheckpoint(
       'Ошибка обработки чат-сообщения',
@@ -101,19 +160,19 @@ router.post('/smart', async (req: Request, res: Response) => {
  */
 function generateSmartResponse(message: string, username: string): string {
   const lowerMessage = message.toLowerCase();
-  
+
   if (lowerMessage.includes('привет') || lowerMessage.includes('hello')) {
     return `Привет, ${username}! Как дела? Чем могу помочь?`;
   }
-  
+
   if (lowerMessage.includes('как дела') || lowerMessage.includes('что нового')) {
     return `У меня всё отлично, ${username}! Готов помочь с любыми задачами. Что вас интересует?`;
   }
-  
+
   if (lowerMessage.includes('код') || lowerMessage.includes('программир')) {
     return `Отлично, ${username}! Я помогу с программированием. Какой язык или технологию используем? Могу создать проект, написать функции, исправить ошибки или объяснить концепции.`;
   }
-  
+
   if (lowerMessage.includes('помощ') || lowerMessage.includes('help')) {
     return `Конечно помогу, ${username}! Я могу:
 
@@ -126,15 +185,15 @@ function generateSmartResponse(message: string, username: string): string {
 
 Просто скажите, что нужно сделать!`;
   }
-  
+
   if (lowerMessage.includes('спасибо') || lowerMessage.includes('благодар')) {
     return `Пожалуйста, ${username}! Всегда рад помочь. Если появятся ещё вопросы - обращайтесь!`;
   }
-  
+
   if (lowerMessage.includes('создай') || lowerMessage.includes('сделай')) {
     return `Хорошо, ${username}! Расскажите подробнее, что именно нужно создать? Я готов приступить к работе.`;
   }
-  
+
   // Общий ответ
   return `Понял, ${username}! Вы написали: "${message.substring(0, 80)}${message.length > 80 ? '...' : ''}". 
 

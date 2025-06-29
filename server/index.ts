@@ -68,6 +68,34 @@ app.use((req, res, next) => {
     throw err;
   });
 
+  // Подключаем маршруты
+  const routes = express.Router();
+  const smartChatRoutes = express.Router();
+  const checkpointRoutes = express.Router();
+  const streamingRoutes = express.Router();
+  const pythonProviderRoutes = express.Router();
+  const searchRoutes = express.Router();
+  const imageRoute = express.Router();
+  const embroideryRoutes = express.Router();
+  const svgGeneratorRoutes = express.Router();
+  const vectorizerRoutes = express.Router();
+  const deepspeekRoutes = express.Router();
+  const directAIRoutes = express.Router();
+
+  app.use('/api', routes);
+  app.use('/api/chat', smartChatRoutes);
+  app.use('/api/checkpoint', checkpointRoutes);
+  app.use('/api/streaming', streamingRoutes);
+  app.use('/api/python', pythonProviderRoutes);
+  app.use('/api/search', searchRoutes);
+  app.use('/api/image', imageRoute);
+  app.use('/api/embroidery', embroideryRoutes);
+  app.use('/api/svg', svgGeneratorRoutes);
+  app.use('/api/vectorizer', vectorizerRoutes);
+  app.use('/api/deepspeek', deepspeekRoutes);
+  app.use('/api/direct-ai', directAIRoutes);
+  app.use('/api/seo', require('./seo-analyzer-routes'));
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
