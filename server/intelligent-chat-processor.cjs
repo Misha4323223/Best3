@@ -19,10 +19,7 @@ const SmartLogger = {
   }
 };
 
-// Импортируем необходимые сервисы
-const webSearchProvider = require('./web-search-provider');
-const aiImageGenerator = require('./ai-image-generator');
-const chatMemory = require('./chat-memory');
+// Сервисы будут импортированы динамически при необходимости
 
 /**
  * Основная функция анализа намерений пользователя
@@ -140,7 +137,7 @@ async function analyzeWithAI(userQuery) {
 
 Ответь только одним словом - типом запроса.`;
 
-    const g4fProvider = require('./g4f-provider');
+    const g4fProvider = require('./g4f-provider.js');
     const result = await g4fProvider.generateResponse(analysisPrompt, {
       provider: 'Qwen_Qwen_2_72B',
       max_tokens: 20
@@ -274,6 +271,7 @@ async function executeWebSearchPlan(userQuery, options) {
   SmartLogger.execute(`Выполняю веб-поиск для: "${userQuery}"`);
   
   try {
+    const { default: webSearchProvider } = await import('./web-search-provider.js');
     const searchResult = await webSearchProvider.performAdvancedSearch(userQuery, {
       language: 'ru',
       maxResults: 8,
@@ -308,6 +306,7 @@ async function executeImageGenerationPlan(userQuery, options) {
     // Оптимизируем промпт для лучшего качества
     const optimizedPrompt = await optimizeImagePrompt(userQuery);
     
+    const { default: aiImageGenerator } = await import('./ai-image-generator.js');
     const imageResult = await aiImageGenerator.generateImage(optimizedPrompt, {
       style: 'realistic',
       quality: 'high'
@@ -358,7 +357,7 @@ async function optimizeImagePrompt(userQuery) {
 
 Ответь только улучшенным промптом без пояснений.`;
 
-    const g4fProvider = require('./g4f-provider');
+    const g4fProvider = require('./g4f-provider.js');
     const result = await g4fProvider.generateResponse(optimizationPrompt, {
       provider: 'Qwen_Qwen_2_72B',
       max_tokens: 150
@@ -433,7 +432,7 @@ async function executeConversationPlan(userQuery, options) {
 
 Ответь дружелюбно и по существу. Если можешь помочь чем-то конкретным, предложи это.`;
 
-    const g4fProvider = require('./g4f-provider');
+    const g4fProvider = require('./g4f-provider.js');
     const result = await g4fProvider.generateResponse(conversationPrompt, {
       provider: 'Qwen_Qwen_2_72B',
       max_tokens: 200

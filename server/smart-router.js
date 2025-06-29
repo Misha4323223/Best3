@@ -46,7 +46,7 @@ const embroideryHandler = require('./embroidery-chat-handler');
 const aiEmbroideryPipeline = require('./ai-embroidery-pipeline');
 const webSearchProvider = require('./web-search-provider');
 const chatMemory = require('./chat-memory');
-const intelligentProcessor = require('./intelligent-chat-processor');
+const intelligentProcessor = require('./intelligent-chat-processor.cjs');
 // const svgPrintConverter = require('./svg-print-converter'); // Заменен на advancedVectorizer
 
 /**
@@ -59,17 +59,22 @@ async function getAIResponseWithSearch(userQuery, options = {}) {
     // ===== ИНТЕЛЛЕКТУАЛЬНЫЙ АНАЛИЗ ЗАПРОСА =====
     // Новый "невидимый мозг" анализирует каждое сообщение автоматически
     SmartLogger.route(`🧠 Запуск интеллектуального анализа запроса`);
-    const intelligentResult = await intelligentProcessor.analyzeAndExecute(userQuery, options);
-    
-    if (intelligentResult.success) {
-      SmartLogger.route(`✅ Интеллектуальный процессор успешно обработал запрос`);
-      return intelligentResult;
-    } else if (intelligentResult.shouldFallback) {
-      SmartLogger.route(`⚠️ Переход к стандартной логике маршрутизации`);
-      // Продолжаем выполнение стандартной логики ниже
+    try {
+      const intelligentResult = await intelligentProcessor.analyzeAndExecute(userQuery, options);
+      
+      if (intelligentResult.success) {
+        SmartLogger.route(`✅ Интеллектуальный процессор успешно обработал запрос`);
+        return intelligentResult;
+      } else if (intelligentResult.shouldFallback) {
+        SmartLogger.route(`⚠️ Переход к стандартной логике маршрутизации`);
+        // Продолжаем выполнение стандартной логики ниже
+      }
+    } catch (processorError) {
+      SmartLogger.route(`⚠️ Ошибка интеллектуального процессора: ${processorError.message}, переход к стандартной логике`);
+      // Продолжаем выполнение стандартной логики
     }
     // ===== КОНЕЦ ИНТЕЛЛЕКТУАЛЬНОГО АНАЛИЗА =====
-    
+
     // Получаем контекст сессии
     const sessionId = options.sessionId;
     let sessionContext = { context: chatMemory.AI_CAPABILITIES, messageCount: 0 };
