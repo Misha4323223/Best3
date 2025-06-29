@@ -5,7 +5,7 @@
 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const intelligentProcessor = require('./server/intelligent-chat-processor');
+const intelligentProcessor = require('./server/intelligent-chat-processor.cjs');
 
 async function testProcessor() {
   console.log('🧠 Тестирование интеллектуального процессора...\n');
