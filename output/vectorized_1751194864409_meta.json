@@ -1,0 +1,31 @@
+{
+  "filename": "vectorized_1751194864409.svg",
+  "timestamp": 1751194864409,
+  "sourceUrl": "https://image.pollinations.ai/prompt/hyperrealistic%20professional%20t-shirt%20print%2C%20exactly%205%20colors%20maximum%2C%20photorealistic%20detailed%20illustration%2C%20no%20drop%20shadows%20no%20blur%20effects%2C%20solid%20black%20background%2C%20sharp%20clean%20contours%2C%20adult%20mature%20design%2C%20cyan%20purple%20white%20black%20silver%20color%20scheme%2C%20ultra-detailed%20street%20elements%2C%20realistic%20textures%2C%20fierce%20punk%20features%2C%20serious%20aesthetic%2C%20screen%20printing%20ready%2C%20commercial%20quality%2C%20English%20Translation%20Cyber%20cat.%0A%0AOptimized%20Prompt%20for%20T-Shirt%20Print%20Design%20%20%0ADesign%20a%20cyber%20cat%20with%20sharp%2C%20clean%20lines%2C%20no%20shadows%20or%20gradients%2C%20using%20a%20maximum%20of%205%20colors.%20The%20design%20should%20have%20a%20futuristic%2C%20tech-inspired%20aesthetic%2C%20featuring%20elements%20like%20circuits%2C%20neon%20accents%2C%20or%20digital%20patterns.%20Ensure%20it%20is%20simple%2C%20bold%2C%20and%20suitable%20for%20screen%20printing.?width=3072&height=3072&nologo=true&enhance=true&model=flux-pro&seed=1751194342804&quality=ultra",
+  "svgSize": 2578488,
+  "options": {
+    "ltres": 1,
+    "qtres": 1,
+    "pathomit": 8,
+    "colorsampling": 1,
+    "numberofcolors": 16,
+    "mincolorratio": 0.02,
+    "colorquantcycles": 3,
+    "scale": 1,
+    "simplifytolerance": 0,
+    "roundcoords": 1,
+    "corsenabled": false,
+    "rightangleenhance": true,
+    "layering": 0,
+    "strokewidth": 1,
+    "linefilter": false,
+    "viewbox": false,
+    "desc": false,
+    "lcpr": 0,
+    "qcpr": 0,
+    "blurradius": 0,
+    "blurdelta": 20
+  },
+  "vectorizer": "ImageTracerJS",
+  "version": "1.2.6"
+}
