@@ -890,8 +890,14 @@ async function executePlan(plan, userQuery, options = {}) {
 async function executeWebSearchPlan(userQuery, options) {
   SmartLogger.execute(`Выполняю веб-поиск для: "${userQuery}"`);
   
+  const reasons = [];
+  reasons.push(`Определил запрос "${userQuery}" как поисковый`);
+  
   try {
     const { default: webSearchProvider } = await import('./web-search-provider.js');
+    
+    reasons.push('Использую продвинутый веб-поиск для получения актуальной информации');
+    
     const searchResult = await webSearchProvider.performAdvancedSearch(userQuery, {
       language: 'ru',
       maxResults: 8,
@@ -901,6 +907,8 @@ async function executeWebSearchPlan(userQuery, options) {
     if (searchResult.success && searchResult.aiProcessedAnswer) {
       let response = searchResult.aiProcessedAnswer;
       
+      reasons.push('AI обработал результаты поиска и сформировал структурированный ответ');
+      
       // Применяем эмоциональную адаптацию
       if (options.emotional) {
         response = emotionalAnalyzer.generateEmotionalResponse(
@@ -908,7 +916,11 @@ async function executeWebSearchPlan(userQuery, options) {
           response, 
           'web_search'
         );
+        reasons.push(`Адаптировал ответ под эмоциональное состояние: ${options.emotional.dominantEmotion}`);
       }
+      
+      const finalReason = reasons.join(' → ');
+      SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
       
       return {
         success: true,
@@ -917,14 +929,19 @@ async function executeWebSearchPlan(userQuery, options) {
         category: 'web_search',
         searchUsed: true,
         sources: searchResult.sources?.slice(0, 3) || [],
-        emotionalTone: options.emotional?.overallTone || 'neutral'
+        emotionalTone: options.emotional?.overallTone || 'neutral',
+        reason: finalReason
       };
     }
     
-    return { success: false, shouldFallback: true };
+    reasons.push('Поиск не дал релевантных результатов, перехожу к стандартной логике');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${reasons.join(' → ')}`);
+    return { success: false, shouldFallback: true, reason: reasons.join(' → ') };
   } catch (error) {
-    SmartLogger.execute(`Ошибка веб-поиска: ${error.message}`);
-    return { success: false, shouldFallback: true };
+    reasons.push(`Ошибка поиска: ${error.message}`);
+    const finalReason = reasons.join(' → ');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+    return { success: false, shouldFallback: true, reason: finalReason };
   }
 }
 
@@ -934,27 +951,40 @@ async function executeWebSearchPlan(userQuery, options) {
 async function executeImageGenerationPlan(userQuery, options) {
   SmartLogger.execute(`Выполняю генерацию изображения для: "${userQuery}"`);
   
+  const reasons = [];
+  reasons.push(`Распознал запрос "${userQuery}" как команду создания изображения`);
+  
   try {
     // Определяем стиль на основе запроса
     let style = 'realistic';
     if (userQuery.includes('принт') || userQuery.includes('футболка') || userQuery.includes('логотип')) {
       style = 'print';
+      reasons.push('Определил стиль "print" на основе ключевых слов (принт/футболка/логотип)');
     } else if (userQuery.includes('мультяшн') || userQuery.includes('cartoon')) {
       style = 'cartoon';
+      reasons.push('Определил стиль "cartoon" на основе ключевых слов');
     } else if (userQuery.includes('художественн') || userQuery.includes('артистич')) {
       style = 'artistic';
+      reasons.push('Определил стиль "artistic" на основе ключевых слов');
+    } else {
+      reasons.push('Использую стиль "realistic" по умолчанию');
     }
     
     // Используем улучшенную систему промптов
+    reasons.push('Применяю систему улучшения промптов: очистка → перевод → оптимизация');
     const enhancedPrompt = await promptEnhancer.enhancePrompt(userQuery, style);
     
     const { default: aiImageGenerator } = await import('./ai-image-generator.js');
+    reasons.push('Использую AI генератор изображений Pollinations.ai');
+    
     const imageResult = await aiImageGenerator.generateImage(enhancedPrompt, {
       style: style,
       quality: 'high'
     });
     
     if (imageResult.success && imageResult.imageUrl) {
+      reasons.push('Изображение успешно сгенерировано, формирую детальный ответ с метаданными');
+      
       let baseResponse = `✨ Изображение создано с улучшенным промптом! 
 
 ![Сгенерированное изображение](${imageResult.imageUrl})
@@ -979,7 +1009,11 @@ async function executeImageGenerationPlan(userQuery, options) {
           baseResponse, 
           'image_generation'
         );
+        reasons.push(`Адаптировал ответ под эмоцию пользователя: ${options.emotional.dominantEmotion}`);
       }
+
+      const finalReason = reasons.join(' → ');
+      SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
 
       return {
         success: true,
@@ -991,14 +1025,20 @@ async function executeImageGenerationPlan(userQuery, options) {
         enhancedPrompt: enhancedPrompt,
         originalPrompt: userQuery,
         detectedStyle: style,
-        emotionalTone: options.emotional?.overallTone || 'neutral'
+        emotionalTone: options.emotional?.overallTone || 'neutral',
+        reason: finalReason
       };
     }
     
-    return { success: false, shouldFallback: true };
+    reasons.push('Генерация изображения не удалась, перехожу к стандартной логике');
+    const finalReason = reasons.join(' → ');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+    return { success: false, shouldFallback: true, reason: finalReason };
   } catch (error) {
-    SmartLogger.execute(`Ошибка генерации изображения: ${error.message}`);
-    return { success: false, shouldFallback: true };
+    reasons.push(`Ошибка генерации: ${error.message}`);
+    const finalReason = reasons.join(' → ');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+    return { success: false, shouldFallback: true, reason: finalReason };
   }
 }
 
@@ -1320,6 +1360,10 @@ async function executeEmbroideryPlan(userQuery, options) {
 async function executeTimeDatePlan(userQuery, options) {
   SmartLogger.execute(`Получаю текущее время и дату`);
   
+  const reasons = [];
+  reasons.push(`Распознал запрос "${userQuery}" как вопрос о времени/дате`);
+  reasons.push('Получаю текущее время в московском часовом поясе');
+  
   const now = new Date();
   const timeStr = now.toLocaleString('ru-RU', { 
     timeZone: 'Europe/Moscow',
@@ -1331,6 +1375,8 @@ async function executeTimeDatePlan(userQuery, options) {
     weekday: 'long'
   });
   
+  reasons.push('Форматирую время в удобном для чтения виде');
+  
   let response = `Сейчас: ${timeStr} (московское время)`;
   
   // Применяем эмоциональную адаптацию
@@ -1340,14 +1386,19 @@ async function executeTimeDatePlan(userQuery, options) {
       response, 
       'time_date'
     );
+    reasons.push(`Адаптировал ответ под эмоцию: ${options.emotional.dominantEmotion}`);
   }
+  
+  const finalReason = reasons.join(' → ');
+  SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
   
   return {
     success: true,
     response: response,
     provider: 'IntelligentTimeProviderEmotional',
     category: 'time_date',
-    emotionalTone: options.emotional?.overallTone || 'neutral'
+    emotionalTone: options.emotional?.overallTone || 'neutral',
+    reason: finalReason
   };
 }
 
@@ -1357,9 +1408,14 @@ async function executeTimeDatePlan(userQuery, options) {
 async function executeConversationPlan(userQuery, options) {
   SmartLogger.execute(`Генерирую ответ для обычного общения`);
   
+  const reasons = [];
+  reasons.push(`Классифицировал "${userQuery}" как обычное общение`);
+  
   try {
     // Получаем эмоциональное состояние из опций
     const emotional = options.emotional || { dominantEmotion: 'neutral', overallTone: 'neutral' };
+    
+    reasons.push(`Проанализировал эмоциональное состояние: ${emotional.dominantEmotion}`);
     
     // Адаптируем промпт под эмоциональное состояние
     let conversationPrompt = `Ты дружелюбный AI-помощник. `;
@@ -1368,21 +1424,27 @@ async function executeConversationPlan(userQuery, options) {
     switch (emotional.dominantEmotion) {
       case 'joy':
         conversationPrompt += `Пользователь в хорошем настроении! Отвечай позитивно и энергично. `;
+        reasons.push('Настроил позитивный и энергичный стиль ответа');
         break;
       case 'anger':
         conversationPrompt += `Пользователь расстроен или раздражён. Отвечай спокойно, понимающе и конструктивно. `;
+        reasons.push('Настроил спокойный и понимающий стиль ответа');
         break;
       case 'sadness':
         conversationPrompt += `Пользователь грустит или устал. Отвечай поддерживающе и ободряюще. `;
+        reasons.push('Настроил поддерживающий и ободряющий стиль ответа');
         break;
       case 'surprise':
         conversationPrompt += `Пользователь удивлён или любопытен. Отвечай интересно и познавательно. `;
+        reasons.push('Настроил интересный и познавательный стиль ответа');
         break;
       case 'polite':
         conversationPrompt += `Пользователь очень вежлив. Отвечай также вежливо и учтиво. `;
+        reasons.push('Настроил вежливый и учтивый стиль ответа');
         break;
       default:
         conversationPrompt += `Отвечай естественно и дружелюбно. `;
+        reasons.push('Использую нейтральный дружелюбный стиль ответа');
     }
     
     conversationPrompt += `
@@ -1391,6 +1453,8 @@ async function executeConversationPlan(userQuery, options) {
 
 Ответь в соответствии с настроением пользователя. Если можешь помочь чем-то конкретным, предложи это.`;
 
+    reasons.push('Отправляю запрос к AI модели Qwen_Qwen_2_72B для генерации ответа');
+
     const g4fProvider = require('./g4f-provider.js');
     const result = await g4fProvider.generateResponse(conversationPrompt, {
       provider: 'Qwen_Qwen_2_72B',
@@ -1398,6 +1462,8 @@ async function executeConversationPlan(userQuery, options) {
     });
     
     if (result.success && result.response) {
+      reasons.push('AI сгенерировал ответ, применяю эмоциональную адаптацию');
+      
       // Применяем эмоциональную адаптацию к ответу
       const adaptedResponse = emotionalAnalyzer.generateEmotionalResponse(
         emotional, 
@@ -1405,19 +1471,30 @@ async function executeConversationPlan(userQuery, options) {
         'conversation'
       );
       
+      reasons.push('Финализировал ответ с учетом эмоционального контекста');
+      
+      const finalReason = reasons.join(' → ');
+      SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+      
       return {
         success: true,
         response: adaptedResponse,
         provider: 'IntelligentConversationEmotional',
         category: 'conversation',
-        emotionalTone: emotional.overallTone
+        emotionalTone: emotional.overallTone,
+        reason: finalReason
       };
     }
     
-    return { success: false, shouldFallback: true };
+    reasons.push('AI не смог сгенерировать ответ, перехожу к стандартной логике');
+    const finalReason = reasons.join(' → ');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+    return { success: false, shouldFallback: true, reason: finalReason };
   } catch (error) {
-    SmartLogger.execute(`Ошибка генерации разговора: ${error.message}`);
-    return { success: false, shouldFallback: true };
+    reasons.push(`Ошибка генерации: ${error.message}`);
+    const finalReason = reasons.join(' → ');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+    return { success: false, shouldFallback: true, reason: finalReason };
   }
 }
 
@@ -1429,35 +1506,65 @@ async function analyzeAndExecute(userQuery, options = {}) {
   SmartLogger.brain(`=== ЗАПУСК ИНТЕЛЛЕКТУАЛЬНОГО АНАЛИЗА ===`);
   SmartLogger.brain(`Запрос: "${userQuery}"`);
   
+  const globalReasons = [];
+  globalReasons.push('Запустил интеллектуальный анализ запроса пользователя');
+  
   try {
     // Шаг 1: Анализ намерений
+    globalReasons.push('Анализирую намерения пользователя (грамматика + эмоции + контекст)');
     const intent = await analyzeUserIntent(userQuery, options);
     
+    globalReasons.push(`Определил категорию: ${intent.category} (уверенность: ${intent.confidence}%)`);
+    
     // Шаг 2: Создание плана
+    globalReasons.push('Создаю план действий на основе намерений');
     const plan = await createActionPlan(intent, options);
+    
+    globalReasons.push(`План: ${plan.description} (порог: ${intent.smartThreshold}%)`);
     
     // Шаг 3: Выполнение плана (используем умные пороги)
     if (plan.shouldExecute) {
+      globalReasons.push(`Уверенность ${plan.confidence}% превышает порог ${intent.smartThreshold}%, выполняю план`);
       SmartLogger.brain(`Выполняем план с уверенностью ${plan.confidence}% (порог пройден)`);
+      
       const result = await executePlan(plan, userQuery, options);
       
       if (result.success) {
+        globalReasons.push('План успешно выполнен');
+        const finalGlobalReason = globalReasons.join(' → ');
+        SmartLogger.brain(`=== ФИНАЛЬНЫЕ ПРИЧИНЫ: ${finalGlobalReason} ===`);
+        
+        // Добавляем глобальную причину к результату
+        result.globalReason = finalGlobalReason;
+        if (result.reason) {
+          result.fullReason = `${finalGlobalReason} | ДЕТАЛИ: ${result.reason}`;
+        }
+        
         SmartLogger.brain(`=== УСПЕШНОЕ ВЫПОЛНЕНИЕ ПЛАНА ===`);
         return result;
       } else if (result.shouldFallback) {
+        globalReasons.push('План не сработал, перехожу к стандартной логике');
+        const finalGlobalReason = globalReasons.join(' → ');
+        SmartLogger.brain(`=== ФИНАЛЬНЫЕ ПРИЧИНЫ: ${finalGlobalReason} ===`);
         SmartLogger.brain(`=== ПЕРЕХОД К СТАНДАРТНОЙ ЛОГИКЕ ===`);
-        return { success: false, shouldFallback: true };
+        return { success: false, shouldFallback: true, globalReason: finalGlobalReason };
       }
     }
     
     // Если план не подходит, используем стандартную логику
+    globalReasons.push(`Уверенность ${plan.confidence}% ниже порога ${intent.smartThreshold}%, использую стандартную логику`);
+    const finalGlobalReason = globalReasons.join(' → ');
+    SmartLogger.brain(`=== ФИНАЛЬНЫЕ ПРИЧИНЫ: ${finalGlobalReason} ===`);
     SmartLogger.brain(`=== ПЛАН НЕ ПРОШЕЛ УМНЫЙ ПОРОГ, ПЕРЕХОД К СТАНДАРТНОЙ ЛОГИКЕ ===`);
     SmartLogger.brain(`Уверенность: ${plan.confidence}%, требуемый порог: ${intent.smartThreshold}%`);
-    return { success: false, shouldFallback: true };
+    return { success: false, shouldFallback: true, globalReason: finalGlobalReason };
     
   } catch (error) {
+    globalReasons.push(`Критическая ошибка: ${error.message}`);
+    const finalGlobalReason = globalReasons.join(' → ');
+    SmartLogger.brain(`=== ФИНАЛЬНЫЕ ПРИЧИНЫ: ${finalGlobalReason} ===`);
     SmartLogger.brain(`=== ОШИБКА АНАЛИЗА: ${error.message} ===`);
-    return { success: false, shouldFallback: true, error: error.message };
+    return { success: false, shouldFallback: true, error: error.message, globalReason: finalGlobalReason };
   }
 }
 
