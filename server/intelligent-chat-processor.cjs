@@ -4,6 +4,19 @@
  * Работает прозрачно, как система принятия решений в ChatGPT-4
  */
 
+/**
+ * Универсальная функция для добавления таймаутов к асинхронным операциям
+ */
+function withTimeout(promise, timeoutMs, description = 'Operation') {
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Timeout: ${description} превысил лимит ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+  
+  return Promise.race([promise, timeout]);
+}
+
 const SmartLogger = {
   brain: (message, data) => {
     const timestamp = new Date().toISOString();
@@ -973,8 +986,18 @@ async function analyzeUserIntent(userQuery, options = {}) {
   // Если уверенность ниже умного порога, используем AI анализ
   if (bestScore === 0 || bestConfidence < smartThreshold) {
     SmartLogger.brain(`Уверенность ${bestConfidence}% ниже порога ${smartThreshold}%, используем AI анализ`);
-    bestCategory = await analyzeWithAI(userQuery);
-    bestConfidence = 50; // Среднее значение для AI анализа
+    try {
+      bestCategory = await withTimeout(
+        analyzeWithAI(userQuery),
+        10000, // 10 секунд
+        'AI анализ намерений пользователя'
+      );
+      bestConfidence = 50; // Среднее значение для AI анализа
+    } catch (error) {
+      SmartLogger.brain(`AI анализ не удался: ${error.message}, используем conversation`);
+      bestCategory = 'conversation';
+      bestConfidence = 20;
+    }
   }
   
   SmartLogger.brain(`Финальная категория: ${bestCategory} (уверенность: ${bestConfidence}%)`);
@@ -1011,10 +1034,14 @@ async function analyzeWithAI(userQuery) {
 Ответь только одним словом - типом запроса.`;
 
     const g4fProvider = require('./g4f-provider.js');
-    const result = await g4fProvider.generateResponse(analysisPrompt, {
-      provider: 'Qwen_Qwen_2_72B',
-      max_tokens: 20
-    });
+    const result = await withTimeout(
+      g4fProvider.generateResponse(analysisPrompt, {
+        provider: 'Qwen_Qwen_2_72B',
+        max_tokens: 20
+      }),
+      8000, // 8 секунд для быстрого анализа
+      'G4F анализ категории запроса'
+    );
     
     if (result.success && result.response) {
       const aiCategory = result.response.trim().toLowerCase();
@@ -1199,15 +1226,23 @@ async function executeWebSearchPlan(userQuery, options) {
   reasons.push(`Определил запрос "${userQuery}" как поисковый`);
   
   try {
-    const { default: webSearchProvider } = await import('./web-search-provider.js');
+    const { default: webSearchProvider } = await withTimeout(
+      import('./web-search-provider.js'),
+      5000, // 5 секунд для импорта
+      'Импорт модуля веб-поиска'
+    );
     
     reasons.push('Использую продвинутый веб-поиск для получения актуальной информации');
     
-    const searchResult = await webSearchProvider.performAdvancedSearch(userQuery, {
-      language: 'ru',
-      maxResults: 8,
-      includeAIProcessing: true
-    });
+    const searchResult = await withTimeout(
+      webSearchProvider.performAdvancedSearch(userQuery, {
+        language: 'ru',
+        maxResults: 8,
+        includeAIProcessing: true
+      }),
+      25000, // 25 секунд для веб-поиска
+      'Выполнение веб-поиска'
+    );
     
     if (searchResult.success && searchResult.aiProcessedAnswer) {
       let response = searchResult.aiProcessedAnswer;
@@ -1279,13 +1314,21 @@ async function executeImageGenerationPlan(userQuery, options) {
     reasons.push('Применяю систему улучшения промптов: очистка → перевод → оптимизация');
     const enhancedPrompt = await promptEnhancer.enhancePrompt(userQuery, style);
     
-    const { default: aiImageGenerator } = await import('./ai-image-generator.js');
+    const { default: aiImageGenerator } = await withTimeout(
+      import('./ai-image-generator.js'),
+      5000, // 5 секунд для импорта
+      'Импорт генератора изображений'
+    );
     reasons.push('Использую AI генератор изображений Pollinations.ai');
     
-    const imageResult = await aiImageGenerator.generateImage(enhancedPrompt, {
-      style: style,
-      quality: 'high'
-    });
+    const imageResult = await withTimeout(
+      aiImageGenerator.generateImage(enhancedPrompt, {
+        style: style,
+        quality: 'high'
+      }),
+      60000, // 60 секунд для генерации изображения
+      'Генерация изображения'
+    );
     
     if (imageResult.success && imageResult.imageUrl) {
       reasons.push('Изображение успешно сгенерировано, формирую детальный ответ с метаданными');
@@ -1570,7 +1613,11 @@ const promptEnhancer = {
       
       // Шаг 4: AI-оптимизация (если доступна)
       try {
-        const aiOptimized = await this.getAIOptimization(processed, style);
+        const aiOptimized = await withTimeout(
+          this.getAIOptimization(processed, style),
+          12000, // 12 секунд для AI оптимизации
+          'AI оптимизация промпта'
+        );
         if (aiOptimized && aiOptimized.length > processed.length) {
           processed = aiOptimized;
           SmartLogger.execute(`AI оптимизация применена`);
@@ -1611,10 +1658,14 @@ Make it more detailed and specific for AI image generation. Focus on:
 Return only the improved prompt, no explanations.`;
 
     const g4fProvider = require('./g4f-provider.js');
-    const result = await g4fProvider.generateResponse(optimizationPrompt, {
-      provider: 'Qwen_Qwen_2_72B',
-      max_tokens: 150
-    });
+    const result = await withTimeout(
+      g4fProvider.generateResponse(optimizationPrompt, {
+        provider: 'Qwen_Qwen_2_72B',
+        max_tokens: 150
+      }),
+      10000, // 10 секунд для оптимизации промпта
+      'G4F оптимизация промпта'
+    );
     
     if (result.success && result.response) {
       return result.response.trim();
@@ -1824,10 +1875,14 @@ ${userContext}
     reasons.push('Отправляю запрос к AI модели Qwen_Qwen_2_72B для генерации ответа');
 
     const g4fProvider = require('./g4f-provider.js');
-    const result = await g4fProvider.generateResponse(conversationPrompt, {
-      provider: 'Qwen_Qwen_2_72B',
-      max_tokens: 250
-    });
+    const result = await withTimeout(
+      g4fProvider.generateResponse(conversationPrompt, {
+        provider: 'Qwen_Qwen_2_72B',
+        max_tokens: 250
+      }),
+      15000, // 15 секунд для генерации ответа в разговоре
+      'G4F генерация ответа для разговора'
+    );
     
     if (result.success && result.response) {
       reasons.push('AI сгенерировал ответ, применяю эмоциональную адаптацию');
