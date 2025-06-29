@@ -1334,11 +1334,15 @@ async function executePlan(plan, userQuery, options = {}) {
         break;
         
       case 'vectorization':
-        result = await executeVectorizationPlan(userQuery, enhancedOptions);
+        // Векторизация выполняется через smart-router fallback
+        SmartLogger.execute(`Векторизация передается в smart-router`);
+        result = { success: false, shouldFallback: true };
         break;
         
       case 'embroidery':
-        result = await executeEmbroideryPlan(userQuery, enhancedOptions);
+        // Конвертация в вышивку выполняется через smart-router fallback  
+        SmartLogger.execute(`Конвертация в вышивку передается в smart-router`);
+        result = { success: false, shouldFallback: true };
         break;
         
       case 'time_date':
@@ -1837,40 +1841,9 @@ Return only the improved prompt, no explanations.`;
   }
 };
 
-/**
- * Оптимизация промпта для генерации изображений
- */
-async function optimizeImagePrompt(userQuery) {
-  try {
-    // Используем новую систему улучшения промптов
-    const enhanced = await promptEnhancer.enhancePrompt(userQuery, 'realistic');
-    SmartLogger.execute(`Промпт оптимизирован: ${enhanced.substring(0, 100)}...`);
-    return enhanced;
-  } catch (error) {
-    SmartLogger.execute(`Ошибка оптимизации промпта: ${error.message}`);
-    return userQuery;
-  }
-}
 
-/**
- * Выполнение плана векторизации
- */
-async function executeVectorizationPlan(userQuery, options) {
-  SmartLogger.execute(`Выполняю векторизацию изображения`);
-  
-  // Этот план будет выполняться через fallback к smart-router
-  return { success: false, shouldFallback: true };
-}
 
-/**
- * Выполнение плана конвертации в вышивку
- */
-async function executeEmbroideryPlan(userQuery, options) {
-  SmartLogger.execute(`Выполняю конвертацию в вышивку`);
-  
-  // Этот план будет выполняться через fallback к smart-router
-  return { success: false, shouldFallback: true };
-}
+
 
 /**
  * Выполнение плана получения времени
