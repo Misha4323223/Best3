@@ -722,7 +722,7 @@ async function getAIResponseWithSearch(userQuery, options = {}) {
                     response += `\n• [Композитная версия](${sepFile.composite.url})`;
                   }
                 });
-              }```tool_code
+              }
               // Анализ цветов
               if (optimization.advanced.analysis) {
                 const analysis = optimization.advanced.analysis;
