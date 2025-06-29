@@ -24,6 +24,263 @@ const SmartLogger = {
   memory: (message, data) => {
     const timestamp = new Date().toISOString();
     console.log(`💾 [${timestamp}] ACTION MEMORY: ${message}`, data ? JSON.stringify(data, null, 2) : '');
+  },
+  emotion: (message, data) => {
+    const timestamp = new Date().toISOString();
+    console.log(`😊 [${timestamp}] EMOTIONAL ANALYSIS: ${message}`, data ? JSON.stringify(data, null, 2) : '');
+  }
+};
+
+/**
+ * Система эмоционального анализа и адаптивных ответов
+ */
+const emotionalAnalyzer = {
+  // Словари для определения эмоций
+  emotionPatterns: {
+    // Позитивные эмоции
+    joy: {
+      keywords: ['отлично', 'супер', 'классно', 'круто', 'замечательно', 'прекрасно', 'восторг', 'радость', 'счастлив', 'довольн', 'ура', 'ого', 'вау', 'amazing', 'great', 'awesome', 'fantastic', 'wonderful'],
+      emojis: ['😊', '😄', '🎉', '👍', '💯', '✨', '🌟', '❤️'],
+      weight: 2
+    },
+    
+    // Злость/раздражение
+    anger: {
+      keywords: ['бесит', 'злой', 'раздражает', 'дурак', 'идиот', 'ненавижу', 'достал', 'надоел', 'плохо', 'ужасно', 'отвратительно', 'фигня', 'дерьмо', 'блин', 'черт', 'angry', 'hate', 'stupid', 'terrible', 'awful'],
+      emojis: ['😤', '😠', '💢', '🤬', '😡'],
+      weight: 3
+    },
+    
+    // Усталость/грусть
+    sadness: {
+      keywords: ['устал', 'грустно', 'печально', 'депрессия', 'скучно', 'одиноко', 'тоскливо', 'плохое настроение', 'не хочется', 'лень', 'sad', 'tired', 'boring', 'lonely', 'depressed'],
+      emojis: ['😔', '😞', '😢', '😴', '💤', '😪'],
+      weight: 2
+    },
+    
+    // Удивление/интерес
+    surprise: {
+      keywords: ['удивительно', 'невероятно', 'интересно', 'любопытно', 'странно', 'необычно', 'как так', 'неожиданно', 'wow', 'amazing', 'incredible', 'interesting', 'curious', 'strange'],
+      emojis: ['😮', '🤔', '😯', '🧐', '💭', '❓'],
+      weight: 1.5
+    },
+    
+    // Вежливость
+    polite: {
+      keywords: ['пожалуйста', 'спасибо', 'благодарю', 'извините', 'простите', 'будьте добры', 'не могли бы', 'please', 'thank you', 'sorry', 'excuse me'],
+      emojis: ['🙏', '😊', '💝', '🤝'],
+      weight: 1.5
+    },
+    
+    // Нейтральные вопросы
+    neutral_question: {
+      keywords: ['что', 'как', 'где', 'когда', 'почему', 'зачем', 'можешь', 'помоги', 'объясни', 'расскажи', 'what', 'how', 'where', 'when', 'why', 'help', 'explain'],
+      emojis: ['❓', '🤔', '💭'],
+      weight: 1
+    }
+  },
+
+  /**
+   * Анализ эмоциональной тональности текста
+   */
+  analyzeEmotion(text) {
+    SmartLogger.emotion(`Анализируем эмоции в тексте: "${text.substring(0, 50)}..."`);
+    
+    const lowerText = text.toLowerCase();
+    const emotions = {};
+    let dominantEmotion = 'neutral';
+    let maxScore = 0;
+    
+    // Анализируем каждую эмоцию
+    for (const [emotion, data] of Object.entries(this.emotionPatterns)) {
+      let score = 0;
+      const matches = [];
+      
+      // Подсчитываем совпадения
+      for (const keyword of data.keywords) {
+        if (lowerText.includes(keyword)) {
+          score += data.weight;
+          matches.push(keyword);
+        }
+      }
+      
+      emotions[emotion] = {
+        score,
+        matches,
+        confidence: Math.min(score * 20, 100) // Нормализуем до 100%
+      };
+      
+      // Определяем доминирующую эмоцию
+      if (score > maxScore) {
+        maxScore = score;
+        dominantEmotion = emotion;
+      }
+    }
+    
+    // Дополнительный анализ на основе пунктуации и стиля
+    const punctuationAnalysis = this.analyzePunctuation(text);
+    const styleAnalysis = this.analyzeWritingStyle(text);
+    
+    const result = {
+      dominantEmotion,
+      emotions,
+      confidence: emotions[dominantEmotion]?.confidence || 0,
+      punctuation: punctuationAnalysis,
+      style: styleAnalysis,
+      overallTone: this.determineOverallTone(emotions, punctuationAnalysis, styleAnalysis)
+    };
+    
+    SmartLogger.emotion('Результат эмоционального анализа:', result);
+    return result;
+  },
+
+  /**
+   * Анализ пунктуации для определения эмоций
+   */
+  analyzePunctuation(text) {
+    const analysis = {
+      exclamationMarks: (text.match(/!/g) || []).length,
+      questionMarks: (text.match(/\?/g) || []).length,
+      capsWords: (text.match(/[А-ЯA-Z]{2,}/g) || []).length,
+      dots: (text.match(/\.{2,}/g) || []).length
+    };
+    
+    // Интерпретация
+    let interpretation = 'neutral';
+    if (analysis.exclamationMarks >= 2) interpretation = 'excited';
+    else if (analysis.capsWords >= 2) interpretation = 'angry_or_excited';
+    else if (analysis.dots >= 1) interpretation = 'thoughtful_or_sad';
+    else if (analysis.questionMarks >= 2) interpretation = 'confused_or_curious';
+    
+    return { ...analysis, interpretation };
+  },
+
+  /**
+   * Анализ стиля письма
+   */
+  analyzeWritingStyle(text) {
+    const wordCount = text.split(/\s+/).length;
+    const avgWordLength = text.replace(/\s+/g, '').length / wordCount;
+    const sentenceCount = text.split(/[.!?]+/).length - 1;
+    
+    return {
+      wordCount,
+      avgWordLength,
+      sentenceCount,
+      isLongMessage: wordCount > 20,
+      isShortMessage: wordCount < 5,
+      formality: avgWordLength > 5 ? 'formal' : 'casual'
+    };
+  },
+
+  /**
+   * Определение общей тональности
+   */
+  determineOverallTone(emotions, punctuation, style) {
+    const scores = Object.entries(emotions)
+      .filter(([_, data]) => data.score > 0)
+      .sort((a, b) => b[1].score - a[1].score);
+    
+    if (scores.length === 0) return 'neutral';
+    
+    const topEmotion = scores[0][0];
+    const confidence = scores[0][1].confidence;
+    
+    // Модификаторы на основе пунктуации
+    let modifier = '';
+    if (punctuation.interpretation === 'excited' && topEmotion !== 'anger') {
+      modifier = '_excited';
+    } else if (punctuation.interpretation === 'angry_or_excited' && confidence > 50) {
+      modifier = '_intense';
+    }
+    
+    return topEmotion + modifier;
+  },
+
+  /**
+   * Генерация адаптивного ответа на основе эмоций
+   */
+  generateEmotionalResponse(emotionalState, baseResponse, category) {
+    SmartLogger.emotion(`Адаптируем ответ под эмоцию: ${emotionalState.dominantEmotion}`);
+    
+    const templates = this.getResponseTemplates(emotionalState.overallTone, category);
+    const selectedTemplate = templates[Math.floor(Math.random() * templates.length)];
+    
+    // Добавляем эмодзи
+    const emoji = this.selectEmoji(emotionalState.dominantEmotion);
+    
+    // Формируем финальный ответ
+    let adaptedResponse = selectedTemplate.prefix + ' ' + baseResponse;
+    
+    if (selectedTemplate.suffix) {
+      adaptedResponse += ' ' + selectedTemplate.suffix;
+    }
+    
+    if (emoji) {
+      adaptedResponse = emoji + ' ' + adaptedResponse;
+    }
+    
+    SmartLogger.emotion(`Адаптированный ответ: "${adaptedResponse.substring(0, 100)}..."`);
+    return adaptedResponse;
+  },
+
+  /**
+   * Шаблоны ответов для разных эмоций
+   */
+  getResponseTemplates(tone, category) {
+    const templates = {
+      joy: [
+        { prefix: 'Отлично! С радостью помогу!', suffix: 'Надеюсь, результат вас порадует! 🎉' },
+        { prefix: 'Замечательно! Это будет интересно!', suffix: 'Уверен, получится здорово! ✨' },
+        { prefix: 'Супер! Давайте сделаем это!', suffix: 'Думаю, вам понравится результат! 🌟' }
+      ],
+      
+      anger: [
+        { prefix: 'Понимаю ваше раздражение. Давайте решим это быстро.', suffix: 'Надеюсь, это поможет улучшить ситуацию.' },
+        { prefix: 'Извините за неудобства. Сейчас всё исправим.', suffix: 'Постараюсь сделать всё максимально эффективно.' },
+        { prefix: 'Вижу, что вы расстроены. Попробуем решить проблему.', suffix: 'Надеюсь, это поможет.' }
+      ],
+      
+      sadness: [
+        { prefix: 'Понимаю, что сейчас непросто. Давайте попробуем.', suffix: 'Надеюсь, это немного поднимет настроение! 🌈' },
+        { prefix: 'Не расстраивайтесь, мы обязательно справимся.', suffix: 'Всё будет хорошо! 💝' },
+        { prefix: 'Поддерживаю вас! Вместе мы решим эту задачу.', suffix: 'Верю, что у нас получится! 🤗' }
+      ],
+      
+      surprise: [
+        { prefix: 'Интересная задача! Давайте разберёмся.', suffix: 'Любопытно посмотреть, что получится! 🔍' },
+        { prefix: 'Необычный запрос! Попробуем сделать что-то особенное.', suffix: 'Это будет познавательно! 🧐' },
+        { prefix: 'Отличный вопрос! Сейчас всё выясним.', suffix: 'Результат может вас удивить! ✨' }
+      ],
+      
+      polite: [
+        { prefix: 'Конечно! Буду рад помочь.', suffix: 'Если нужно что-то ещё, обращайтесь! 🤝' },
+        { prefix: 'С удовольствием! Сейчас сделаю.', suffix: 'Благодарю за вежливость! 😊' },
+        { prefix: 'Разумеется! Приступаю к выполнению.', suffix: 'Рад быть полезным! 🙏' }
+      ],
+      
+      neutral_question: [
+        { prefix: 'Хороший вопрос! Давайте разберёмся.', suffix: 'Надеюсь, ответ будет полезным! 💭' },
+        { prefix: 'Понятно! Сейчас найдём решение.', suffix: 'Постараюсь дать исчерпывающий ответ! 🎯' },
+        { prefix: 'Ясно! Приступаю к анализу.', suffix: 'Думаю, это поможет! 📋' }
+      ],
+      
+      neutral: [
+        { prefix: 'Хорошо! Сейчас выполню.', suffix: 'Готово! Если нужно что-то ещё, обращайтесь.' },
+        { prefix: 'Понятно! Приступаю к работе.', suffix: 'Надеюсь, результат вам подойдёт!' },
+        { prefix: 'Сейчас сделаю!', suffix: 'Готово к использованию!' }
+      ]
+    };
+    
+    return templates[tone] || templates.neutral;
+  },
+
+  /**
+   * Выбор подходящего эмодзи
+   */
+  selectEmoji(emotion) {
+    const emojiSets = this.emotionPatterns[emotion]?.emojis || ['🤖'];
+    return emojiSets[Math.floor(Math.random() * emojiSets.length)];
   }
 };
 
@@ -239,11 +496,12 @@ async function analyzeUserIntent(userQuery, options = {}) {
   
   const query = userQuery.toLowerCase().trim();
   
-  // Получаем грамматический анализ и контекст действий
+  // Получаем грамматический анализ, контекст действий и эмоциональный анализ
   const grammar = analyzeGrammar(userQuery);
   const context = actionMemory.getActionContext();
+  const emotional = emotionalAnalyzer.analyzeEmotion(userQuery);
   
-  SmartLogger.brain('Грамматический контекст:', { grammar, context });
+  SmartLogger.brain('Грамматический и эмоциональный контекст:', { grammar, context, emotional });
   
   // Категории запросов с приоритетами
   const intentCategories = {
@@ -434,6 +692,7 @@ async function analyzeUserIntent(userQuery, options = {}) {
     originalQuery: userQuery,
     grammar: grammar,
     context: context,
+    emotional: emotional,
     smartThreshold: smartThreshold
   };
 }
@@ -555,7 +814,8 @@ async function createActionPlan(intent, options = {}) {
     shouldExecute: shouldExecute,
     confidence: intent.confidence,
     grammar: intent.grammar,
-    context: intent.context
+    context: intent.context,
+    emotional: intent.emotional
   };
 }
 
@@ -568,29 +828,35 @@ async function executePlan(plan, userQuery, options = {}) {
   try {
     let result = { success: false, shouldFallback: true };
     
+    // Передаем эмоциональный контекст во все планы
+    const enhancedOptions = {
+      ...options,
+      emotional: plan.emotional
+    };
+    
     switch (plan.category) {
       case 'web_search':
-        result = await executeWebSearchPlan(userQuery, options);
+        result = await executeWebSearchPlan(userQuery, enhancedOptions);
         break;
         
       case 'image_generation':
-        result = await executeImageGenerationPlan(userQuery, options);
+        result = await executeImageGenerationPlan(userQuery, enhancedOptions);
         break;
         
       case 'vectorization':
-        result = await executeVectorizationPlan(userQuery, options);
+        result = await executeVectorizationPlan(userQuery, enhancedOptions);
         break;
         
       case 'embroidery':
-        result = await executeEmbroideryPlan(userQuery, options);
+        result = await executeEmbroideryPlan(userQuery, enhancedOptions);
         break;
         
       case 'time_date':
-        result = await executeTimeDatePlan(userQuery, options);
+        result = await executeTimeDatePlan(userQuery, enhancedOptions);
         break;
         
       case 'conversation':
-        result = await executeConversationPlan(userQuery, options);
+        result = await executeConversationPlan(userQuery, enhancedOptions);
         break;
         
       default:
@@ -633,13 +899,25 @@ async function executeWebSearchPlan(userQuery, options) {
     });
     
     if (searchResult.success && searchResult.aiProcessedAnswer) {
+      let response = searchResult.aiProcessedAnswer;
+      
+      // Применяем эмоциональную адаптацию
+      if (options.emotional) {
+        response = emotionalAnalyzer.generateEmotionalResponse(
+          options.emotional, 
+          response, 
+          'web_search'
+        );
+      }
+      
       return {
         success: true,
-        response: searchResult.aiProcessedAnswer,
-        provider: 'IntelligentWebSearch',
+        response: response,
+        provider: 'IntelligentWebSearchEmotional',
         category: 'web_search',
         searchUsed: true,
-        sources: searchResult.sources?.slice(0, 3) || []
+        sources: searchResult.sources?.slice(0, 3) || [],
+        emotionalTone: options.emotional?.overallTone || 'neutral'
       };
     }
     
@@ -667,7 +945,7 @@ async function executeImageGenerationPlan(userQuery, options) {
     });
     
     if (imageResult.success && imageResult.imageUrl) {
-      const response = `Изображение создано! 
+      let baseResponse = `Изображение создано! 
 
 ![Сгенерированное изображение](${imageResult.imageUrl})
 
@@ -677,13 +955,23 @@ async function executeImageGenerationPlan(userQuery, options) {
 
 Если нужно что-то изменить, просто опишите что хотите поправить.`;
 
+      // Применяем эмоциональную адаптацию если есть эмоциональный контекст
+      if (options.emotional) {
+        baseResponse = emotionalAnalyzer.generateEmotionalResponse(
+          options.emotional, 
+          baseResponse, 
+          'image_generation'
+        );
+      }
+
       return {
         success: true,
-        response: response,
-        provider: 'IntelligentImageGenerator',
+        response: baseResponse,
+        provider: 'IntelligentImageGeneratorEmotional',
         category: 'image_generation',
         imageGenerated: true,
-        imageUrl: imageResult.imageUrl
+        imageUrl: imageResult.imageUrl,
+        emotionalTone: options.emotional?.overallTone || 'neutral'
       };
     }
     
@@ -765,11 +1053,23 @@ async function executeTimeDatePlan(userQuery, options) {
     weekday: 'long'
   });
   
+  let response = `Сейчас: ${timeStr} (московское время)`;
+  
+  // Применяем эмоциональную адаптацию
+  if (options.emotional) {
+    response = emotionalAnalyzer.generateEmotionalResponse(
+      options.emotional, 
+      response, 
+      'time_date'
+    );
+  }
+  
   return {
     success: true,
-    response: `Сейчас: ${timeStr} (московское время)`,
-    provider: 'IntelligentTimeProvider',
-    category: 'time_date'
+    response: response,
+    provider: 'IntelligentTimeProviderEmotional',
+    category: 'time_date',
+    emotionalTone: options.emotional?.overallTone || 'neutral'
   };
 }
 
@@ -780,11 +1080,38 @@ async function executeConversationPlan(userQuery, options) {
   SmartLogger.execute(`Генерирую ответ для обычного общения`);
   
   try {
-    const conversationPrompt = `Ты дружелюбный AI-помощник. Ответь естественно на сообщение пользователя:
+    // Получаем эмоциональное состояние из опций
+    const emotional = options.emotional || { dominantEmotion: 'neutral', overallTone: 'neutral' };
+    
+    // Адаптируем промпт под эмоциональное состояние
+    let conversationPrompt = `Ты дружелюбный AI-помощник. `;
+    
+    // Настраиваем стиль ответа под эмоцию пользователя
+    switch (emotional.dominantEmotion) {
+      case 'joy':
+        conversationPrompt += `Пользователь в хорошем настроении! Отвечай позитивно и энергично. `;
+        break;
+      case 'anger':
+        conversationPrompt += `Пользователь расстроен или раздражён. Отвечай спокойно, понимающе и конструктивно. `;
+        break;
+      case 'sadness':
+        conversationPrompt += `Пользователь грустит или устал. Отвечай поддерживающе и ободряюще. `;
+        break;
+      case 'surprise':
+        conversationPrompt += `Пользователь удивлён или любопытен. Отвечай интересно и познавательно. `;
+        break;
+      case 'polite':
+        conversationPrompt += `Пользователь очень вежлив. Отвечай также вежливо и учтиво. `;
+        break;
+      default:
+        conversationPrompt += `Отвечай естественно и дружелюбно. `;
+    }
+    
+    conversationPrompt += `
 
 Пользователь: "${userQuery}"
 
-Ответь дружелюбно и по существу. Если можешь помочь чем-то конкретным, предложи это.`;
+Ответь в соответствии с настроением пользователя. Если можешь помочь чем-то конкретным, предложи это.`;
 
     const g4fProvider = require('./g4f-provider.js');
     const result = await g4fProvider.generateResponse(conversationPrompt, {
@@ -793,11 +1120,19 @@ async function executeConversationPlan(userQuery, options) {
     });
     
     if (result.success && result.response) {
+      // Применяем эмоциональную адаптацию к ответу
+      const adaptedResponse = emotionalAnalyzer.generateEmotionalResponse(
+        emotional, 
+        result.response.trim(), 
+        'conversation'
+      );
+      
       return {
         success: true,
-        response: result.response.trim(),
-        provider: 'IntelligentConversation',
-        category: 'conversation'
+        response: adaptedResponse,
+        provider: 'IntelligentConversationEmotional',
+        category: 'conversation',
+        emotionalTone: emotional.overallTone
       };
     }
     
