@@ -260,10 +260,13 @@ async function analyzeUserIntent(userQuery, options = {}) {
       keywords: ['нарисуй', 'создай изображение', 'сгенерируй', 'картинку', 'изображение', 'рисунок', 'фото', 'picture', 'image'],
       confidence: 0,
       negativePatterns: [
-        // Исключаения для вопросов о прошлом
-        'что ты создал', 'что создал', 'какое изображение', 'какую картинку', 
-        'опиши изображение', 'опиши картинку', 'что на изображении', 'что на картинке',
-        'последнее изображение', 'предыдущее изображение', 'созданное изображение'
+        // Исключения для вопросов о прошлом - УСИЛЕННЫЕ
+        'что ты создал', 'что создал', 'что ты нарисовал', 'что нарисовал',
+        'какое изображение', 'какую картинку', 'какой рисунок',
+        'опиши изображение', 'опиши картинку', 'опиши рисунок', 'опиши последнее',
+        'что на изображении', 'что на картинке', 'что на рисунке',
+        'последнее изображение', 'предыдущее изображение', 'созданное изображение',
+        'покажи что', 'расскажи что', 'объясни что'
       ]
     },
     
@@ -298,6 +301,29 @@ async function analyzeUserIntent(userQuery, options = {}) {
     }
   };
   
+  // СПЕЦИАЛЬНАЯ ПРОВЕРКА: детектор вопросов о прошлом
+  const questionAboutPastPatterns = [
+    'что ты создал', 'что создал', 'что ты нарисовал', 'что нарисовал',
+    'что ты сделал', 'что сделал', 'опиши последнее', 'опиши что',
+    'расскажи что ты', 'покажи что ты'
+  ];
+  
+  const isQuestionAboutPast = questionAboutPastPatterns.some(pattern => query.includes(pattern));
+  
+  if (isQuestionAboutPast) {
+    SmartLogger.brain('ОБНАРУЖЕН ВОПРОС О ПРОШЛОМ! Принудительно переводим в conversation');
+    return {
+      category: 'conversation',
+      confidence: 95,
+      query: userQuery,
+      originalQuery: userQuery,
+      grammar: grammar,
+      context: context,
+      smartThreshold: 10,
+      forcedCategory: 'question_about_past'
+    };
+  }
+
   // Вычисляем уверенность для каждой категории
   for (const [category, data] of Object.entries(intentCategories)) {
     let matches = 0;
@@ -324,9 +350,9 @@ async function analyzeUserIntent(userQuery, options = {}) {
     
     // Применяем штрафы за негативные паттерны
     if (negativeMatches > 0) {
-      const penalty = negativeMatches * 40; // Большой штраф за исключения
+      const penalty = negativeMatches * 80; // КРИТИЧЕСКИЙ штраф за исключения
       data.confidence = Math.max(0, data.confidence - penalty);
-      SmartLogger.brain(`Применен штраф ${penalty}% за негативные паттерны в категории ${category}`);
+      SmartLogger.brain(`Применен КРИТИЧЕСКИЙ штраф ${penalty}% за негативные паттерны в категории ${category}`);
     }
     
     // Грамматические модификаторы
