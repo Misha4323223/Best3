@@ -83,11 +83,27 @@ async function analyzeUserIntent(userQuery, options = {}) {
       }
     }
     
+    // Базовая уверенность от совпадений
     data.confidence = (matches / totalKeywords) * 100;
     
-    // Бонус за длинные совпадения
+    // Улучшенная система бонусов
     if (matches > 0) {
-      data.confidence += Math.min(matches * 10, 50);
+      // Бонус за количество совпадений
+      data.confidence += Math.min(matches * 15, 60);
+      
+      // Дополнительный бонус для поисковых запросов
+      if (category === 'web_search' && matches >= 1) {
+        data.confidence += 30;
+      }
+      
+      // Бонус за длину совпадающих ключевых слов
+      const totalMatchLength = data.keywords
+        .filter(keyword => query.includes(keyword))
+        .reduce((sum, keyword) => sum + keyword.length, 0);
+      
+      if (totalMatchLength > 10) {
+        data.confidence += 20;
+      }
     }
   }
   
@@ -470,7 +486,7 @@ async function analyzeAndExecute(userQuery, options = {}) {
     const plan = await createActionPlan(intent, options);
     
     // Шаг 3: Выполнение плана
-    if (plan.shouldExecute && plan.confidence > 30) {
+    if (plan.shouldExecute && plan.confidence > 15) {
       const result = await executePlan(plan, userQuery, options);
       
       if (result.success) {
