@@ -94,7 +94,10 @@ app.use((req, res, next) => {
   app.use('/api/vectorizer', vectorizerRoutes);
   app.use('/api/deepspeek', deepspeekRoutes);
   app.use('/api/direct-ai', directAIRoutes);
-  app.use('/api/seo', require('./seo-analyzer-routes'));
+  
+  // Динамический импорт SEO роутов для совместимости с ES модулями
+  const { default: seoRoutes } = await import('./seo-analyzer-routes.js');
+  app.use('/api/seo', seoRoutes);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route

@@ -171,3 +171,4 @@ function isValidUrl(string) {
 }
 
 module.exports = router;
+export default router;
