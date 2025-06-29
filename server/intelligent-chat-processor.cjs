@@ -49,8 +49,6 @@ const SmartLogger = {
  * Определяет ЧТО именно пользователь хочет создать
  */
 function analyzeCreationContext(query) {
-  SmartLogger.brain(`Анализирую контекст создания для: "${query.substring(0, 50)}..."`);
-  
   const lowerQuery = query.toLowerCase().trim();
   
   // Объекты для визуального создания
@@ -90,7 +88,6 @@ function analyzeCreationContext(query) {
   const hasCreationCommand = creationCommands.some(cmd => lowerQuery.includes(cmd));
   
   if (!hasCreationCommand) {
-    SmartLogger.brain('Команды создания не обнаружены');
     return result;
   }
   
@@ -102,7 +99,6 @@ function analyzeCreationContext(query) {
       result.type = 'visual';
       result.confidence = Math.min(90, result.confidence + 30);
       result.detectedObject = obj;
-      SmartLogger.brain(`Обнаружен визуальный объект: "${obj}"`);
       break; // Берем первое совпадение
     }
   }
@@ -114,7 +110,6 @@ function analyzeCreationContext(query) {
         result.type = 'visual';
         result.confidence = Math.min(80, result.confidence + 25);
         result.detectedObject = `команда: ${cmd}`;
-        SmartLogger.brain(`Обнаружена команда визуального создания: "${cmd}"`);
         break;
       }
     }
@@ -127,7 +122,6 @@ function analyzeCreationContext(query) {
         result.type = 'textual';
         result.confidence = Math.min(85, result.confidence + 25);
         result.detectedObject = obj;
-        SmartLogger.brain(`Обнаружен текстовый объект: "${obj}"`);
         break;
       }
     }
@@ -140,7 +134,6 @@ function analyzeCreationContext(query) {
         result.type = 'other';
         result.confidence = Math.min(70, result.confidence + 20);
         result.detectedObject = obj;
-        SmartLogger.brain(`Обнаружен другой объект: "${obj}"`);
         break;
       }
     }
@@ -150,10 +143,8 @@ function analyzeCreationContext(query) {
   if (lowerQuery.trim() === 'создай' || lowerQuery.trim() === 'сделай') {
     result.type = 'ambiguous';
     result.confidence = 5; // Очень низкая уверенность
-    SmartLogger.brain('Обнаружена неопределенная команда создания без объекта');
   }
   
-  SmartLogger.brain(`Результат анализа контекста создания:`, result);
   return result;
 }
 
@@ -210,8 +201,6 @@ const emotionalAnalyzer = {
    * Анализ эмоциональной тональности текста
    */
   analyzeEmotion(text) {
-    SmartLogger.emotion(`Анализируем эмоции в тексте: "${text.substring(0, 50)}..."`);
-    
     const lowerText = text.toLowerCase();
     const emotions = {};
     let dominantEmotion = 'neutral';
@@ -256,7 +245,6 @@ const emotionalAnalyzer = {
       overallTone: this.determineOverallTone(emotions, punctuationAnalysis, styleAnalysis)
     };
     
-    SmartLogger.emotion('Результат эмоционального анализа:', result);
     return result;
   },
 
@@ -346,7 +334,6 @@ const emotionalAnalyzer = {
       adaptedResponse = emoji + ' ' + adaptedResponse;
     }
     
-    SmartLogger.emotion(`Адаптированный ответ: "${adaptedResponse.substring(0, 100)}..."`);
     return adaptedResponse;
   },
 
@@ -432,7 +419,7 @@ const sessionMemory = {
           topicsDiscussed: 0
         }
       });
-      SmartLogger.memory(`Создана новая сессия: ${sessionId}`);
+
     }
     
     const session = this.sessions.get(sessionId);
@@ -446,7 +433,7 @@ const sessionMemory = {
     const oldName = session.userName;
     session.userName = name;
     
-    SmartLogger.memory(`Имя пользователя изменено: "${oldName}" → "${name}" (сессия: ${sessionId})`);
+
     return `Отлично! Теперь я буду называть вас ${name}. Приятно познакомиться! 😊`;
   },
 
@@ -465,7 +452,7 @@ const sessionMemory = {
     session.goals.push(goalRecord);
     session.statistics.goalsAchieved = session.goals.filter(g => g.status === 'completed').length;
     
-    SmartLogger.memory(`Добавлена цель: "${goal}" (приоритет: ${priority}, сессия: ${sessionId})`);
+
     
     const userName = session.userName ? `, ${session.userName}` : '';
     return `Понял${userName}! Добавил в ваши цели: "${goal}". Общее количество активных целей: ${session.goals.filter(g => g.status === 'active').length}. Чем могу помочь в её достижении? 🎯`;
@@ -492,11 +479,11 @@ const sessionMemory = {
     if (existingTopic) {
       existingTopic.mentions++;
       existingTopic.lastMentioned = Date.now();
-      SmartLogger.memory(`Обновлена тема: "${topic}" (упоминаний: ${existingTopic.mentions})`);
+
     } else {
       session.topics.push(topicRecord);
       session.statistics.topicsDiscussed = session.topics.length;
-      SmartLogger.memory(`Добавлена новая тема: "${topic}" (категория: ${category})`);
+
     }
     
     return `Запомнил тему "${topic}". Теперь я буду учитывать её в наших разговорах! 📝`;
@@ -533,7 +520,6 @@ const sessionMemory = {
         responses.push(response);
       });
       
-      SmartLogger.memory(`Автоматически извлечено целей: ${extractedGoals.length} из текста: "${text.substring(0, 100)}..."`);
       return responses;
     }
 
@@ -578,7 +564,7 @@ const sessionMemory = {
 
   // Команды управления памятью
   processMemoryCommand(sessionId, command, params) {
-    SmartLogger.memory(`Обработка команды памяти: ${command} с параметрами:`, params);
+
     
     switch (command.toLowerCase()) {
       case 'setusername':
@@ -729,8 +715,6 @@ setInterval(() => {
  * Грамматический анализ текста для понимания намерений
  */
 function analyzeGrammar(text) {
-  SmartLogger.grammar(`Анализируем грамматику: "${text.substring(0, 50)}..."`);
-  
   const query = text.toLowerCase().trim();
   
   // Анализ структуры предложения
@@ -809,7 +793,6 @@ function analyzeGrammar(text) {
   // Если есть и вопросительные и командные слова, приоритет у вопросов
   if (analysis.isQuestion && analysis.isCommand) {
     analysis.isCommand = false;
-    SmartLogger.grammar('Обнаружен конфликт: есть и вопросы и команды. Приоритет у вопроса.');
   }
 
   // Вычисляем уверенность в анализе
@@ -818,7 +801,6 @@ function analyzeGrammar(text) {
     100
   );
 
-  SmartLogger.grammar('Результат грамматического анализа:', analysis);
   return analysis;
 }
 
@@ -832,19 +814,15 @@ function calculateSmartThreshold(grammar, context, category) {
   if (grammar.isQuestion && grammar.tense === 'past') {
     // "что ты создал?" - явно вопрос о прошлом, очень низкий порог для действий
     baseThreshold = 5;
-    SmartLogger.grammar('Снижен порог: вопрос о прошлом действии');
   } else if (grammar.isCommand && grammar.tense === 'future') {
     // "создай завтра" - четкая команда, повышаем порог
     baseThreshold = 25;
-    SmartLogger.grammar('Повышен порог: команда на будущее');
   } else if (grammar.isQuestion) {
     // Обычный вопрос - средний порог
     baseThreshold = 10;
-    SmartLogger.grammar('Установлен низкий порог: обычный вопрос');
   } else if (grammar.isCommand) {
     // Обычная команда - стандартный порог
     baseThreshold = 20;
-    SmartLogger.grammar('Установлен стандартный порог: команда');
   }
 
   // Адаптация на основе контекста
@@ -852,15 +830,12 @@ function calculateSmartThreshold(grammar, context, category) {
     if (context.hasRecentImage && grammar.isQuestion) {
       // Есть недавнее изображение и это вопрос - скорее всего вопрос об изображении
       baseThreshold = 3;
-      SmartLogger.grammar('Критически снижен порог: вопрос при наличии недавнего изображения');
     } else if (!context.hasRecentImage && grammar.isCommand) {
       // Нет недавнего изображения и это команда - вероятно генерация
       baseThreshold = 25;
-      SmartLogger.grammar('Повышен порог: команда генерации без недавних изображений');
     }
   }
 
-  SmartLogger.grammar(`Умный порог для ${category}: ${baseThreshold}%`);
   return baseThreshold;
 }
 
@@ -1335,13 +1310,11 @@ async function executePlan(plan, userQuery, options = {}) {
         
       case 'vectorization':
         // Векторизация выполняется через smart-router fallback
-        SmartLogger.execute(`Векторизация передается в smart-router`);
         result = { success: false, shouldFallback: true };
         break;
         
       case 'embroidery':
         // Конвертация в вышивку выполняется через smart-router fallback  
-        SmartLogger.execute(`Конвертация в вышивку передается в smart-router`);
         result = { success: false, shouldFallback: true };
         break;
         
@@ -1506,7 +1479,6 @@ async function executeImageGenerationPlan(userQuery, options) {
 🎨 **Стиль:** ${style === 'realistic' ? 'Реалистичный' : style === 'print' ? 'Для печати' : style === 'cartoon' ? 'Мультипликационный' : 'Художественный'}
 📐 **Размер:** 1024x1024
 🖼️ **Качество:** Высокое
-🔧 **Промпт улучшен:** Да
 
 💡 **Применены улучшения:**
 • Очистка от лишних слов
@@ -1564,7 +1536,6 @@ const promptEnhancer = {
    * Очистка промпта от лишних слов и повторов
    */
   cleanPrompt(prompt) {
-    SmartLogger.execute(`Очистка промпта: "${prompt.substring(0, 50)}..."`);
     
     let cleaned = prompt.toLowerCase().trim();
     
@@ -1614,7 +1585,6 @@ const promptEnhancer = {
     cleaned = cleaned.replace(/,+/g, ',');
     cleaned = cleaned.replace(/^,|,$/, '');
     
-    SmartLogger.execute(`Промпт очищен: "${cleaned}"`);
     return cleaned;
   },
 
@@ -1622,7 +1592,6 @@ const promptEnhancer = {
    * Простой перевод ключевых слов с русского на английский
    */
   translateToEnglish(prompt) {
-    SmartLogger.execute(`Перевод промпта: "${prompt.substring(0, 50)}..."`);
     
     // Расширенный словарь перевода
     const translations = {
@@ -1694,7 +1663,6 @@ const promptEnhancer = {
       translated = translated.replace(regex, english);
     }
     
-    SmartLogger.execute(`Промпт переведен: "${translated}"`);
     return translated;
   },
 
@@ -1702,7 +1670,6 @@ const promptEnhancer = {
    * Добавление технических деталей и улучшений
    */
   addEnhancements(prompt, style = 'realistic') {
-    SmartLogger.execute(`Добавление улучшений к промпту, стиль: ${style}`);
     
     let enhanced = prompt;
     
@@ -1756,7 +1723,6 @@ const promptEnhancer = {
       enhanced = `${enhanced}, ${missingEnhancements.slice(0, 4).join(', ')}`;
     }
     
-    SmartLogger.execute(`Промпт улучшен: "${enhanced.substring(0, 100)}..."`);
     return enhanced;
   },
 
