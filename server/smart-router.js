@@ -46,6 +46,7 @@ const embroideryHandler = require('./embroidery-chat-handler');
 const aiEmbroideryPipeline = require('./ai-embroidery-pipeline');
 const webSearchProvider = require('./web-search-provider');
 const chatMemory = require('./chat-memory');
+const intelligentProcessor = require('./intelligent-chat-processor');
 // const svgPrintConverter = require('./svg-print-converter'); // Заменен на advancedVectorizer
 
 /**
@@ -54,6 +55,20 @@ const chatMemory = require('./chat-memory');
 async function getAIResponseWithSearch(userQuery, options = {}) {
   try {
     SmartLogger.route(`🤖 Получаем ответ AI с памятью и контекстом`);
+    
+    // ===== ИНТЕЛЛЕКТУАЛЬНЫЙ АНАЛИЗ ЗАПРОСА =====
+    // Новый "невидимый мозг" анализирует каждое сообщение автоматически
+    SmartLogger.route(`🧠 Запуск интеллектуального анализа запроса`);
+    const intelligentResult = await intelligentProcessor.analyzeAndExecute(userQuery, options);
+    
+    if (intelligentResult.success) {
+      SmartLogger.route(`✅ Интеллектуальный процессор успешно обработал запрос`);
+      return intelligentResult;
+    } else if (intelligentResult.shouldFallback) {
+      SmartLogger.route(`⚠️ Переход к стандартной логике маршрутизации`);
+      // Продолжаем выполнение стандартной логики ниже
+    }
+    // ===== КОНЕЦ ИНТЕЛЛЕКТУАЛЬНОГО АНАЛИЗА =====
     
     // Получаем контекст сессии
     const sessionId = options.sessionId;
