@@ -45,6 +45,119 @@ const SmartLogger = {
 };
 
 /**
+ * Система контекстного анализа намерений создания
+ * Определяет ЧТО именно пользователь хочет создать
+ */
+function analyzeCreationContext(query) {
+  SmartLogger.brain(`Анализирую контекст создания для: "${query.substring(0, 50)}..."`);
+  
+  const lowerQuery = query.toLowerCase().trim();
+  
+  // Объекты для визуального создания
+  const visualObjects = [
+    'изображение', 'картинку', 'рисунок', 'фото', 'арт', 'картину', 'дизайн',
+    'логотип', 'иконку', 'баннер', 'постер', 'обложку', 'иллюстрацию',
+    'графику', 'схему визуальную', 'диаграмму', 'чертеж'
+  ];
+  
+  // Команды визуального создания (более точная проверка)
+  const visualCommands = [
+    'нарисуй', 'рисуй', 'изобрази', 'покажи как выглядит', 'визуализируй'
+  ];
+  
+  // Объекты для текстового создания
+  const textObjects = [
+    'список', 'план', 'таблицу', 'документ', 'файл', 'текст', 'статью',
+    'отчет', 'резюме', 'письмо', 'код', 'скрипт', 'программу', 'базу данных',
+    'структуру', 'алгоритм', 'расписание', 'календарь', 'заметку'
+  ];
+  
+  // Объекты для других типов создания
+  const otherObjects = [
+    'канал', 'группу', 'аккаунт', 'профиль', 'папку', 'директорию',
+    'ссылку', 'подключение', 'сервер', 'сайт', 'приложение'
+  ];
+  
+  let result = {
+    type: 'unknown',
+    confidence: 0,
+    detectedObject: null,
+    isCreationIntent: false
+  };
+  
+  // Проверяем наличие команд создания
+  const creationCommands = ['создай', 'сделай', 'построй', 'сгенерируй', 'напиши', 'нарисуй'];
+  const hasCreationCommand = creationCommands.some(cmd => lowerQuery.includes(cmd));
+  
+  if (!hasCreationCommand) {
+    SmartLogger.brain('Команды создания не обнаружены');
+    return result;
+  }
+  
+  result.isCreationIntent = true;
+  
+  // Ищем визуальные объекты
+  for (const obj of visualObjects) {
+    if (lowerQuery.includes(obj)) {
+      result.type = 'visual';
+      result.confidence = Math.min(90, result.confidence + 30);
+      result.detectedObject = obj;
+      SmartLogger.brain(`Обнаружен визуальный объект: "${obj}"`);
+      break; // Берем первое совпадение
+    }
+  }
+  
+  // Ищем команды визуального создания (если объект не найден)
+  if (result.type === 'unknown') {
+    for (const cmd of visualCommands) {
+      if (lowerQuery.includes(cmd)) {
+        result.type = 'visual';
+        result.confidence = Math.min(80, result.confidence + 25);
+        result.detectedObject = `команда: ${cmd}`;
+        SmartLogger.brain(`Обнаружена команда визуального создания: "${cmd}"`);
+        break;
+      }
+    }
+  }
+  
+  // Ищем текстовые объекты (только если не найден визуальный)
+  if (result.type === 'unknown') {
+    for (const obj of textObjects) {
+      if (lowerQuery.includes(obj)) {
+        result.type = 'textual';
+        result.confidence = Math.min(85, result.confidence + 25);
+        result.detectedObject = obj;
+        SmartLogger.brain(`Обнаружен текстовый объект: "${obj}"`);
+        break;
+      }
+    }
+  }
+  
+  // Ищем другие объекты
+  if (result.type === 'unknown') {
+    for (const obj of otherObjects) {
+      if (lowerQuery.includes(obj)) {
+        result.type = 'other';
+        result.confidence = Math.min(70, result.confidence + 20);
+        result.detectedObject = obj;
+        SmartLogger.brain(`Обнаружен другой объект: "${obj}"`);
+        break;
+      }
+    }
+  }
+  
+  // Специальная логика для одиночного "создай"
+  if (lowerQuery.trim() === 'создай' || lowerQuery.trim() === 'сделай') {
+    result.type = 'ambiguous';
+    result.confidence = 5; // Очень низкая уверенность
+    SmartLogger.brain('Обнаружена неопределенная команда создания без объекта');
+  }
+  
+  SmartLogger.brain(`Результат анализа контекста создания:`, result);
+  return result;
+}
+
+/**
  * Система эмоционального анализа и адаптивных ответов
  */
 const emotionalAnalyzer = {
@@ -802,10 +915,14 @@ async function analyzeUserIntent(userQuery, options = {}) {
     };
   }
   
+  // === КОНТЕКСТНЫЙ АНАЛИЗ СОЗДАНИЯ ===
+  const creationContext = analyzeCreationContext(userQuery);
+  
   SmartLogger.brain('Контекст анализа:', { 
     grammar, 
     context, 
     emotional, 
+    creationContext,
     userContext: userContext.substring(0, 200) + '...',
     extractedGoals: extractedGoals ? extractedGoals.length : 0
   });
@@ -822,7 +939,10 @@ async function analyzeUserIntent(userQuery, options = {}) {
     
     image_generation: {
       priority: 90,
-      keywords: ['нарисуй', 'создай изображение', 'сгенерируй', 'картинку', 'изображение', 'рисунок', 'фото', 'picture', 'image'],
+      keywords: [
+        'нарисуй', 'создай изображение', 'создай картинку', 'создай рисунок', 'создай фото',
+        'сгенерируй изображение', 'сгенерируй картинку', 'сгенерируй', 'рисунок', 'фото', 'picture', 'image'
+      ],
       confidence: 0,
       negativePatterns: [
         // Исключения для вопросов о прошлом - УСИЛЕННЫЕ
@@ -831,7 +951,16 @@ async function analyzeUserIntent(userQuery, options = {}) {
         'опиши изображение', 'опиши картинку', 'опиши рисунок', 'опиши последнее',
         'что на изображении', 'что на картинке', 'что на рисунке',
         'последнее изображение', 'предыдущее изображение', 'созданное изображение',
-        'покажи что', 'расскажи что', 'объясни что'
+        'покажи что', 'расскажи что', 'объясни что',
+        // Дополнительные исключения для текстовых объектов
+        'создай список', 'создай план', 'создай таблицу', 'создай документ', 'создай файл',
+        'создай текст', 'создай статью', 'создай отчет', 'создай резюме', 'создай письмо',
+        'создай код', 'создай скрипт', 'создай программу', 'создай алгоритм',
+        'создай структуру', 'создай базу данных', 'создай расписание', 'создай календарь',
+        // Исключения для вопросов об изображениях
+        'что за изображение', 'это изображение', 'про изображение', 'об изображении',
+        'изображение выше', 'данное изображение', 'такое изображение', 'изображение которое',
+        'получилось изображение', 'вижу изображение', 'на изображении показано'
       ]
     },
     
@@ -920,18 +1049,39 @@ async function analyzeUserIntent(userQuery, options = {}) {
       SmartLogger.brain(`Применен КРИТИЧЕСКИЙ штраф ${penalty}% за негативные паттерны в категории ${category}`);
     }
     
+    // === КОНТЕКСТНЫЕ МОДИФИКАТОРЫ НА ОСНОВЕ АНАЛИЗА СОЗДАНИЯ ===
+    if (category === 'image_generation' && creationContext.isCreationIntent) {
+      if (creationContext.type === 'visual') {
+        // БОНУС: Четко определен визуальный объект
+        data.confidence += 40;
+        SmartLogger.brain(`КОНТЕКСТНЫЙ БОНУС: визуальный объект "${creationContext.detectedObject}" (+40%)`);
+      } else if (creationContext.type === 'textual') {
+        // КРИТИЧЕСКИЙ ШТРАФ: Определен текстовый объект
+        data.confidence = Math.max(0, data.confidence - 90);
+        SmartLogger.brain(`КОНТЕКСТНЫЙ ШТРАФ: текстовый объект "${creationContext.detectedObject}" (-90%)`);
+      } else if (creationContext.type === 'other') {
+        // БОЛЬШОЙ ШТРАФ: Определен другой тип объекта
+        data.confidence = Math.max(0, data.confidence - 70);
+        SmartLogger.brain(`КОНТЕКСТНЫЙ ШТРАФ: другой объект "${creationContext.detectedObject}" (-70%)`);
+      } else if (creationContext.type === 'ambiguous') {
+        // ШТРАФ: Неопределенная команда создания
+        data.confidence = Math.max(0, data.confidence - 60);
+        SmartLogger.brain('КОНТЕКСТНЫЙ ШТРАФ: неопределенная команда создания (-60%)');
+      }
+    }
+
     // Грамматические модификаторы
     if (matches > 0) {
       // Специальные правила для генерации изображений
       if (category === 'image_generation') {
         if (grammar.isQuestion && grammar.tense === 'past') {
           // "что ты создал?" - вопрос о прошлом, не генерация
-          data.confidence = Math.max(0, data.confidence - 70);
-          SmartLogger.brain('Штраф за вопрос о прошлом в image_generation: -70%');
+          data.confidence = Math.max(0, data.confidence - 90); // Увеличил штраф с 70 до 90
+          SmartLogger.brain('Штраф за вопрос о прошлом в image_generation: -90%');
         } else if (grammar.isQuestion && context.hasRecentImage) {
           // Вопрос при наличии недавнего изображения - скорее всего о нем
-          data.confidence = Math.max(0, data.confidence - 50);
-          SmartLogger.brain('Штраф за вопрос при наличии недавнего изображения: -50%');
+          data.confidence = Math.max(0, data.confidence - 80); // Увеличил штраф с 50 до 80
+          SmartLogger.brain('Штраф за вопрос при наличии недавнего изображения: -80%');
         } else if (grammar.isCommand && !grammar.isQuestion) {
           // Четкая команда без вопроса - бонус
           data.confidence += 30;
@@ -1019,21 +1169,33 @@ async function analyzeUserIntent(userQuery, options = {}) {
  */
 async function analyzeWithAI(userQuery) {
   try {
-    const analysisPrompt = `Проанализируй этот запрос пользователя и определи его тип:
+    const analysisPrompt = `Проанализируй этот запрос пользователя и определи его тип, учитывая КОНТЕКСТ и ЧТО именно нужно создать:
 
 Запрос: "${userQuery}"
 
+ВАЖНЫЕ ПРАВИЛА:
+1. Если говорится "создай список/план/таблицу/код/документ" - это НЕ image_generation
+2. Если говорится "создай изображение/картинку/рисунок" - это image_generation
+3. Если спрашивают "что создал/нарисовал?" - это conversation (вопрос о прошлом)
+4. Если спрашивают "что на изображении?" - это conversation (анализ существующего)
+
+ПРИМЕРЫ:
+- "создай список покупок" → conversation (текстовая задача)
+- "создай изображение кота" → image_generation (визуальная задача)
+- "что ты создал?" → conversation (вопрос о прошлом)
+- "опиши изображение" → conversation (анализ существующего)
+
 Возможные типы:
 - web_search: если нужна актуальная информация из интернета
-- image_generation: если нужно создать/нарисовать изображение
+- image_generation: если нужно создать ВИЗУАЛЬНЫЙ объект (изображение, картинку, рисунок)
 - vectorization: если нужно конвертировать изображение в векторный формат
 - embroidery: если связано с вышивкой или файлами для вышивальных машин
 - time_date: если спрашивает время или дату
-- conversation: если это обычное общение
+- conversation: если это обычное общение, текстовые задачи или вопросы
 
 Ответь только одним словом - типом запроса.`;
 
-    const g4fProvider = require('./g4f-provider.js');
+    const g4fProvider = await import('./g4f-provider.js');
     const result = await withTimeout(
       g4fProvider.generateResponse(analysisPrompt, {
         provider: 'Qwen_Qwen_2_72B',
@@ -1657,7 +1819,7 @@ Make it more detailed and specific for AI image generation. Focus on:
 
 Return only the improved prompt, no explanations.`;
 
-    const g4fProvider = require('./g4f-provider.js');
+    const g4fProvider = await import('./g4f-provider.js');
     const result = await withTimeout(
       g4fProvider.generateResponse(optimizationPrompt, {
         provider: 'Qwen_Qwen_2_72B',
@@ -1874,7 +2036,7 @@ ${userContext}
 
     reasons.push('Отправляю запрос к AI модели Qwen_Qwen_2_72B для генерации ответа');
 
-    const g4fProvider = require('./g4f-provider.js');
+    const g4fProvider = await import('./g4f-provider.js');
     const result = await withTimeout(
       g4fProvider.generateResponse(conversationPrompt, {
         provider: 'Qwen_Qwen_2_72B',
