@@ -284,6 +284,254 @@ const emotionalAnalyzer = {
   }
 };
 
+// Система расширенной памяти сессии
+const sessionMemory = {
+  sessions: new Map(),
+  maxSessionAge: 24 * 60 * 60 * 1000, // 24 часа
+
+  // Получить или создать данные сессии
+  getSession(sessionId = 'default') {
+    if (!this.sessions.has(sessionId)) {
+      this.sessions.set(sessionId, {
+        sessionId,
+        userName: null,
+        goals: [],
+        topics: [],
+        preferences: {},
+        createdAt: Date.now(),
+        lastActivity: Date.now(),
+        statistics: {
+          messagesCount: 0,
+          goalsAchieved: 0,
+          topicsDiscussed: 0
+        }
+      });
+      SmartLogger.memory(`Создана новая сессия: ${sessionId}`);
+    }
+    
+    const session = this.sessions.get(sessionId);
+    session.lastActivity = Date.now();
+    return session;
+  },
+
+  // Установить имя пользователя
+  setUserName(sessionId, name) {
+    const session = this.getSession(sessionId);
+    const oldName = session.userName;
+    session.userName = name;
+    
+    SmartLogger.memory(`Имя пользователя изменено: "${oldName}" → "${name}" (сессия: ${sessionId})`);
+    return `Отлично! Теперь я буду называть вас ${name}. Приятно познакомиться! 😊`;
+  },
+
+  // Добавить цель
+  addGoal(sessionId, goal, priority = 'medium') {
+    const session = this.getSession(sessionId);
+    const goalRecord = {
+      id: Math.random().toString(36).substr(2, 9),
+      text: goal,
+      priority,
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    
+    session.goals.push(goalRecord);
+    session.statistics.goalsAchieved = session.goals.filter(g => g.status === 'completed').length;
+    
+    SmartLogger.memory(`Добавлена цель: "${goal}" (приоритет: ${priority}, сессия: ${sessionId})`);
+    
+    const userName = session.userName ? `, ${session.userName}` : '';
+    return `Понял${userName}! Добавил в ваши цели: "${goal}". Общее количество активных целей: ${session.goals.filter(g => g.status === 'active').length}. Чем могу помочь в её достижении? 🎯`;
+  },
+
+  // Запомнить тему
+  rememberTopic(sessionId, topic, category = 'general') {
+    const session = this.getSession(sessionId);
+    const topicRecord = {
+      id: Math.random().toString(36).substr(2, 9),
+      text: topic,
+      category,
+      mentions: 1,
+      createdAt: Date.now(),
+      lastMentioned: Date.now()
+    };
+    
+    // Проверяем, есть ли уже похожая тема
+    const existingTopic = session.topics.find(t => 
+      t.text.toLowerCase().includes(topic.toLowerCase()) || 
+      topic.toLowerCase().includes(t.text.toLowerCase())
+    );
+    
+    if (existingTopic) {
+      existingTopic.mentions++;
+      existingTopic.lastMentioned = Date.now();
+      SmartLogger.memory(`Обновлена тема: "${topic}" (упоминаний: ${existingTopic.mentions})`);
+    } else {
+      session.topics.push(topicRecord);
+      session.statistics.topicsDiscussed = session.topics.length;
+      SmartLogger.memory(`Добавлена новая тема: "${topic}" (категория: ${category})`);
+    }
+    
+    return `Запомнил тему "${topic}". Теперь я буду учитывать её в наших разговорах! 📝`;
+  },
+
+  // Автоматическое извлечение целей из текста
+  extractGoalsFromText(sessionId, text) {
+    const goalPatterns = [
+      /я хочу\s+(.+?)(?:[.!?]|$)/gi,
+      /мне нужно\s+(.+?)(?:[.!?]|$)/gi,
+      /хотел бы\s+(.+?)(?:[.!?]|$)/gi,
+      /планирую\s+(.+?)(?:[.!?]|$)/gi,
+      /собираюсь\s+(.+?)(?:[.!?]|$)/gi,
+      /моя цель\s+(.+?)(?:[.!?]|$)/gi,
+      /стремлюсь\s+(.+?)(?:[.!?]|$)/gi
+    ];
+
+    const extractedGoals = [];
+    
+    goalPatterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        const goal = match[1].trim();
+        if (goal.length > 3 && goal.length < 200) {
+          extractedGoals.push(goal);
+        }
+      }
+    });
+
+    if (extractedGoals.length > 0) {
+      const responses = [];
+      extractedGoals.forEach(goal => {
+        const response = this.addGoal(sessionId, goal, 'auto-detected');
+        responses.push(response);
+      });
+      
+      SmartLogger.memory(`Автоматически извлечено целей: ${extractedGoals.length} из текста: "${text.substring(0, 100)}..."`);
+      return responses;
+    }
+
+    return null;
+  },
+
+  // Получить контекст пользователя для AI
+  getUserContext(sessionId) {
+    const session = this.getSession(sessionId);
+    
+    let context = 'КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ:\n';
+    
+    if (session.userName) {
+      context += `👤 Имя: ${session.userName}\n`;
+    }
+    
+    if (session.goals.length > 0) {
+      const activeGoals = session.goals.filter(g => g.status === 'active');
+      if (activeGoals.length > 0) {
+        context += `🎯 Активные цели (${activeGoals.length}):\n`;
+        activeGoals.slice(0, 5).forEach((goal, index) => {
+          context += `   ${index + 1}. ${goal.text} (${goal.priority})\n`;
+        });
+      }
+    }
+    
+    if (session.topics.length > 0) {
+      const recentTopics = session.topics
+        .sort((a, b) => b.lastMentioned - a.lastMentioned)
+        .slice(0, 3);
+      
+      context += `📝 Последние темы:\n`;
+      recentTopics.forEach((topic, index) => {
+        context += `   ${index + 1}. ${topic.text} (${topic.mentions} раз)\n`;
+      });
+    }
+    
+    context += `📊 Статистика: ${session.statistics.messagesCount} сообщений, ${session.statistics.topicsDiscussed} тем\n`;
+    
+    return context;
+  },
+
+  // Команды управления памятью
+  processMemoryCommand(sessionId, command, params) {
+    SmartLogger.memory(`Обработка команды памяти: ${command} с параметрами:`, params);
+    
+    switch (command.toLowerCase()) {
+      case 'setusername':
+      case 'set_user_name':
+        if (params && params.length > 0) {
+          return this.setUserName(sessionId, params.join(' '));
+        }
+        return 'Пожалуйста, укажите имя. Пример: "setUserName Анна"';
+        
+      case 'addgoal':
+      case 'add_goal':
+        if (params && params.length > 0) {
+          const priority = params.includes('--high') ? 'high' : 
+                          params.includes('--low') ? 'low' : 'medium';
+          const goalText = params.filter(p => !p.startsWith('--')).join(' ');
+          return this.addGoal(sessionId, goalText, priority);
+        }
+        return 'Пожалуйста, укажите цель. Пример: "addGoal изучить программирование --high"';
+        
+      case 'remembertopic':
+      case 'remember_topic':
+        if (params && params.length > 0) {
+          return this.rememberTopic(sessionId, params.join(' '));
+        }
+        return 'Пожалуйста, укажите тему. Пример: "rememberTopic искусственный интеллект"';
+        
+      case 'showmemory':
+      case 'show_memory':
+        return this.getUserContext(sessionId);
+        
+      case 'clearmemory':
+      case 'clear_memory':
+        return this.clearSession(sessionId);
+        
+      default:
+        return `Неизвестная команда памяти: ${command}. Доступные команды: setUserName, addGoal, rememberTopic, showMemory, clearMemory`;
+    }
+  },
+
+  // Очистка сессии
+  clearSession(sessionId) {
+    if (this.sessions.has(sessionId)) {
+      const session = this.sessions.get(sessionId);
+      const backup = { ...session };
+      
+      session.goals = [];
+      session.topics = [];
+      session.preferences = {};
+      session.statistics = {
+        messagesCount: 0,
+        goalsAchieved: 0,
+        topicsDiscussed: 0
+      };
+      
+      SmartLogger.memory(`Очищена память сессии: ${sessionId}`, backup);
+      return 'Память сессии очищена! Вы можете начать заново. 🔄';
+    }
+    
+    return 'Сессия не найдена.';
+  },
+
+  // Автоматическая очистка старых сессий
+  cleanupOldSessions() {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (now - session.lastActivity > this.maxSessionAge) {
+        this.sessions.delete(sessionId);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      SmartLogger.memory(`Очищено старых сессий: ${cleaned}`);
+    }
+  }
+};
+
 // Система памяти о последних действиях
 const actionMemory = {
   lastActions: [],
@@ -345,6 +593,11 @@ const actionMemory = {
     };
   }
 };
+
+// Автоматическая очистка старых сессий каждые 30 минут
+setInterval(() => {
+  sessionMemory.cleanupOldSessions();
+}, 30 * 60 * 1000);
 
 /**
  * Грамматический анализ текста для понимания намерений
@@ -495,13 +748,54 @@ async function analyzeUserIntent(userQuery, options = {}) {
   SmartLogger.brain(`Анализирую намерения пользователя: "${userQuery.substring(0, 100)}..."`);
   
   const query = userQuery.toLowerCase().trim();
+  const sessionId = options.sessionId || 'default';
   
   // Получаем грамматический анализ, контекст действий и эмоциональный анализ
   const grammar = analyzeGrammar(userQuery);
   const context = actionMemory.getActionContext();
   const emotional = emotionalAnalyzer.analyzeEmotion(userQuery);
   
-  SmartLogger.brain('Грамматический и эмоциональный контекст:', { grammar, context, emotional });
+  // Получаем пользовательский контекст из памяти сессии
+  const userContext = sessionMemory.getUserContext(sessionId);
+  const session = sessionMemory.getSession(sessionId);
+  
+  // Увеличиваем счетчик сообщений
+  session.statistics.messagesCount++;
+  
+  // Автоматическое извлечение целей из текста пользователя
+  const extractedGoals = sessionMemory.extractGoalsFromText(sessionId, userQuery);
+  
+  // Проверяем, является ли это командой управления памятью
+  const memoryCommandMatch = query.match(/^(setusername|set_user_name|addgoal|add_goal|remembertopic|remember_topic|showmemory|show_memory|clearmemory|clear_memory)\s*(.*)/i);
+  
+  if (memoryCommandMatch) {
+    const [, command, paramString] = memoryCommandMatch;
+    const params = paramString ? paramString.split(' ').filter(p => p.length > 0) : [];
+    
+    SmartLogger.brain(`Обнаружена команда памяти: ${command}`);
+    
+    return {
+      category: 'memory_command',
+      confidence: 100,
+      query: userQuery,
+      originalQuery: userQuery,
+      command: command,
+      params: params,
+      grammar: grammar,
+      context: context,
+      emotional: emotional,
+      userContext: userContext,
+      smartThreshold: 5
+    };
+  }
+  
+  SmartLogger.brain('Контекст анализа:', { 
+    grammar, 
+    context, 
+    emotional, 
+    userContext: userContext.substring(0, 200) + '...',
+    extractedGoals: extractedGoals ? extractedGoals.length : 0
+  });
   
   // Категории запросов с приоритетами
   const intentCategories = {
@@ -792,6 +1086,13 @@ async function createActionPlan(intent, options = {}) {
         'generate_conversation_response'
       ],
       description: 'Обычное общение с пользователем'
+    },
+    
+    memory_command: {
+      steps: [
+        'execute_memory_command'
+      ],
+      description: 'Выполнение команд управления памятью'
     }
   };
   
@@ -857,6 +1158,10 @@ async function executePlan(plan, userQuery, options = {}) {
         
       case 'conversation':
         result = await executeConversationPlan(userQuery, enhancedOptions);
+        break;
+        
+      case 'memory_command':
+        result = await executeMemoryCommandPlan(plan, userQuery, enhancedOptions);
         break;
         
       default:
@@ -1403,12 +1708,61 @@ async function executeTimeDatePlan(userQuery, options) {
 }
 
 /**
+ * Выполнение плана команд памяти
+ */
+async function executeMemoryCommandPlan(plan, userQuery, options) {
+  SmartLogger.execute(`Выполняю команду памяти: ${plan.command}`);
+  
+  const reasons = [];
+  const sessionId = options.sessionId || 'default';
+  
+  reasons.push(`Обнаружена команда памяти: ${plan.command}`);
+  
+  try {
+    // Выполняем команду памяти
+    const commandResult = sessionMemory.processMemoryCommand(sessionId, plan.command, plan.params);
+    reasons.push(`Команда "${plan.command}" выполнена успешно`);
+    
+    // Применяем эмоциональную адаптацию если есть эмоциональный контекст
+    let response = commandResult;
+    if (options.emotional) {
+      response = emotionalAnalyzer.generateEmotionalResponse(
+        options.emotional, 
+        commandResult, 
+        'memory_command'
+      );
+      reasons.push(`Адаптировал ответ под эмоцию: ${options.emotional.dominantEmotion}`);
+    }
+    
+    const finalReason = reasons.join(' → ');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+    
+    return {
+      success: true,
+      response: response,
+      provider: 'IntelligentMemoryManager',
+      category: 'memory_command',
+      command: plan.command,
+      emotionalTone: options.emotional?.overallTone || 'neutral',
+      reason: finalReason
+    };
+  } catch (error) {
+    reasons.push(`Ошибка выполнения команды: ${error.message}`);
+    const finalReason = reasons.join(' → ');
+    SmartLogger.execute(`ПРИЧИНЫ ДЕЙСТВИЙ: ${finalReason}`);
+    return { success: false, shouldFallback: true, reason: finalReason };
+  }
+}
+
+/**
  * Выполнение плана обычного общения
  */
 async function executeConversationPlan(userQuery, options) {
   SmartLogger.execute(`Генерирую ответ для обычного общения`);
   
   const reasons = [];
+  const sessionId = options.sessionId || 'default';
+  
   reasons.push(`Классифицировал "${userQuery}" как обычное общение`);
   
   try {
@@ -1417,8 +1771,22 @@ async function executeConversationPlan(userQuery, options) {
     
     reasons.push(`Проанализировал эмоциональное состояние: ${emotional.dominantEmotion}`);
     
-    // Адаптируем промпт под эмоциональное состояние
-    let conversationPrompt = `Ты дружелюбный AI-помощник. `;
+    // Получаем контекст пользователя для более персонализированных ответов
+    const userContext = sessionMemory.getUserContext(sessionId);
+    reasons.push('Загрузил контекст пользователя из памяти сессии');
+    
+    // Адаптируем промпт под эмоциональное состояние и пользовательский контекст
+    let conversationPrompt = `Ты дружелюбный AI-помощник с памятью о пользователе. `;
+    
+    // Добавляем контекст пользователя в промпт
+    if (userContext && userContext.length > 50) {
+      conversationPrompt += `
+
+${userContext}
+
+Учитывай этот контекст в своём ответе. `;
+      reasons.push('Добавил пользовательский контекст в промпт');
+    }
     
     // Настраиваем стиль ответа под эмоцию пользователя
     switch (emotional.dominantEmotion) {
@@ -1458,7 +1826,7 @@ async function executeConversationPlan(userQuery, options) {
     const g4fProvider = require('./g4f-provider.js');
     const result = await g4fProvider.generateResponse(conversationPrompt, {
       provider: 'Qwen_Qwen_2_72B',
-      max_tokens: 200
+      max_tokens: 250
     });
     
     if (result.success && result.response) {
@@ -1479,9 +1847,10 @@ async function executeConversationPlan(userQuery, options) {
       return {
         success: true,
         response: adaptedResponse,
-        provider: 'IntelligentConversationEmotional',
+        provider: 'IntelligentConversationEmotionalMemory',
         category: 'conversation',
         emotionalTone: emotional.overallTone,
+        hasUserContext: userContext.length > 50,
         reason: finalReason
       };
     }
@@ -1505,16 +1874,49 @@ async function executeConversationPlan(userQuery, options) {
 async function analyzeAndExecute(userQuery, options = {}) {
   SmartLogger.brain(`=== ЗАПУСК ИНТЕЛЛЕКТУАЛЬНОГО АНАЛИЗА ===`);
   SmartLogger.brain(`Запрос: "${userQuery}"`);
+  SmartLogger.brain(`SessionId: ${options.sessionId || 'default'}`);
   
   const globalReasons = [];
   globalReasons.push('Запустил интеллектуальный анализ запроса пользователя');
   
   try {
-    // Шаг 1: Анализ намерений
-    globalReasons.push('Анализирую намерения пользователя (грамматика + эмоции + контекст)');
+    // Шаг 1: Анализ намерений (включая проверку команд памяти)
+    globalReasons.push('Анализирую намерения пользователя (грамматика + эмоции + контекст + память)');
     const intent = await analyzeUserIntent(userQuery, options);
     
     globalReasons.push(`Определил категорию: ${intent.category} (уверенность: ${intent.confidence}%)`);
+    
+    // Специальная обработка для команд памяти - они всегда должны выполняться
+    if (intent.category === 'memory_command') {
+      globalReasons.push('Обнаружена команда памяти - выполняю напрямую');
+      const plan = { 
+        category: 'memory_command', 
+        description: 'Выполнение команды управления памятью',
+        command: intent.command,
+        params: intent.params,
+        shouldExecute: true,
+        confidence: intent.confidence,
+        grammar: intent.grammar,
+        context: intent.context,
+        emotional: intent.emotional
+      };
+      
+      const result = await executeMemoryCommandPlan(plan, userQuery, options);
+      
+      if (result.success) {
+        globalReasons.push('Команда памяти выполнена успешно');
+        const finalGlobalReason = globalReasons.join(' → ');
+        SmartLogger.brain(`=== ФИНАЛЬНЫЕ ПРИЧИНЫ: ${finalGlobalReason} ===`);
+        
+        result.globalReason = finalGlobalReason;
+        if (result.reason) {
+          result.fullReason = `${finalGlobalReason} | ДЕТАЛИ: ${result.reason}`;
+        }
+        
+        SmartLogger.brain(`=== КОМАНДА ПАМЯТИ ВЫПОЛНЕНА ===`);
+        return result;
+      }
+    }
     
     // Шаг 2: Создание плана
     globalReasons.push('Создаю план действий на основе намерений');
