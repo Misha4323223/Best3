@@ -935,23 +935,40 @@ async function executeImageGenerationPlan(userQuery, options) {
   SmartLogger.execute(`Выполняю генерацию изображения для: "${userQuery}"`);
   
   try {
-    // Оптимизируем промпт для лучшего качества
-    const optimizedPrompt = await optimizeImagePrompt(userQuery);
+    // Определяем стиль на основе запроса
+    let style = 'realistic';
+    if (userQuery.includes('принт') || userQuery.includes('футболка') || userQuery.includes('логотип')) {
+      style = 'print';
+    } else if (userQuery.includes('мультяшн') || userQuery.includes('cartoon')) {
+      style = 'cartoon';
+    } else if (userQuery.includes('художественн') || userQuery.includes('артистич')) {
+      style = 'artistic';
+    }
+    
+    // Используем улучшенную систему промптов
+    const enhancedPrompt = await promptEnhancer.enhancePrompt(userQuery, style);
     
     const { default: aiImageGenerator } = await import('./ai-image-generator.js');
-    const imageResult = await aiImageGenerator.generateImage(optimizedPrompt, {
-      style: 'realistic',
+    const imageResult = await aiImageGenerator.generateImage(enhancedPrompt, {
+      style: style,
       quality: 'high'
     });
     
     if (imageResult.success && imageResult.imageUrl) {
-      let baseResponse = `Изображение создано! 
+      let baseResponse = `✨ Изображение создано с улучшенным промптом! 
 
 ![Сгенерированное изображение](${imageResult.imageUrl})
 
-🎨 **Стиль:** Реалистичный
+🎨 **Стиль:** ${style === 'realistic' ? 'Реалистичный' : style === 'print' ? 'Для печати' : style === 'cartoon' ? 'Мультипликационный' : 'Художественный'}
 📐 **Размер:** 1024x1024
 🖼️ **Качество:** Высокое
+🔧 **Промпт улучшен:** Да
+
+💡 **Применены улучшения:**
+• Очистка от лишних слов
+• Перевод на английский
+• Добавление технических деталей
+• Оптимизация для качества
 
 Если нужно что-то изменить, просто опишите что хотите поправить.`;
 
@@ -967,10 +984,13 @@ async function executeImageGenerationPlan(userQuery, options) {
       return {
         success: true,
         response: baseResponse,
-        provider: 'IntelligentImageGeneratorEmotional',
+        provider: 'IntelligentImageGeneratorEnhanced',
         category: 'image_generation',
         imageGenerated: true,
         imageUrl: imageResult.imageUrl,
+        enhancedPrompt: enhancedPrompt,
+        originalPrompt: userQuery,
+        detectedStyle: style,
         emotionalTone: options.emotional?.overallTone || 'neutral'
       };
     }
@@ -983,21 +1003,267 @@ async function executeImageGenerationPlan(userQuery, options) {
 }
 
 /**
- * Оптимизация промпта для генерации изображений
+ * Система улучшения промптов для генерации изображений
  */
-async function optimizeImagePrompt(userQuery) {
-  try {
-    const optimizationPrompt = `Улучши этот промпт для генерации изображения:
+const promptEnhancer = {
+  /**
+   * Очистка промпта от лишних слов и повторов
+   */
+  cleanPrompt(prompt) {
+    SmartLogger.execute(`Очистка промпта: "${prompt.substring(0, 50)}..."`);
+    
+    let cleaned = prompt.toLowerCase().trim();
+    
+    // Удаляем команды генерации
+    const generationCommands = [
+      'создай изображение', 'нарисуй', 'сгенерируй', 'сделай картинку',
+      'создай картинку', 'покажи', 'изобрази', 'нарисуй мне'
+    ];
+    
+    generationCommands.forEach(command => {
+      cleaned = cleaned.replace(new RegExp(`\\b${command}\\b`, 'gi'), '');
+    });
+    
+    // Удаляем лишние слова-паразиты
+    const fillerWords = [
+      'пожалуйста', 'можешь', 'хочу', 'мне нужно', 'давай',
+      'сделай так чтобы', 'я хочу', 'мне бы', 'было бы неплохо'
+    ];
+    
+    fillerWords.forEach(filler => {
+      cleaned = cleaned.replace(new RegExp(`\\b${filler}\\b`, 'gi'), '');
+    });
+    
+    // Убираем множественные "и"
+    cleaned = cleaned.replace(/\s+и\s+и\s+/g, ' и ');
+    cleaned = cleaned.replace(/\s+и\s+и\s+/g, ' и ');
+    
+    // Убираем повторяющиеся слова
+    const words = cleaned.split(/\s+/);
+    const uniqueWords = [];
+    const seenWords = new Set();
+    
+    for (const word of words) {
+      if (word && word.length > 2 && !seenWords.has(word)) {
+        uniqueWords.push(word);
+        seenWords.add(word);
+      } else if (word && word.length <= 2) {
+        uniqueWords.push(word); // Короткие слова не фильтруем
+      }
+    }
+    
+    cleaned = uniqueWords.join(' ').trim();
+    
+    // Убираем лишние пробелы и знаки препинания
+    cleaned = cleaned.replace(/\s+/g, ' ');
+    cleaned = cleaned.replace(/[,;.!?]+/g, ',');
+    cleaned = cleaned.replace(/,+/g, ',');
+    cleaned = cleaned.replace(/^,|,$/, '');
+    
+    SmartLogger.execute(`Промпт очищен: "${cleaned}"`);
+    return cleaned;
+  },
 
-Исходный запрос: "${userQuery}"
+  /**
+   * Простой перевод ключевых слов с русского на английский
+   */
+  translateToEnglish(prompt) {
+    SmartLogger.execute(`Перевод промпта: "${prompt.substring(0, 50)}..."`);
+    
+    // Расширенный словарь перевода
+    const translations = {
+      // Объекты и существа
+      'кот': 'cat', 'кота': 'cat', 'котик': 'cute cat', 'котенок': 'kitten',
+      'собака': 'dog', 'собаку': 'dog', 'щенок': 'puppy',
+      'человек': 'person', 'мужчина': 'man', 'женщина': 'woman',
+      'девушка': 'young woman', 'парень': 'young man',
+      'дракон': 'dragon', 'дракона': 'dragon',
+      'робот': 'robot', 'робота': 'robot',
+      'машина': 'car', 'автомобиль': 'automobile',
+      'дом': 'house', 'здание': 'building',
+      'цветок': 'flower', 'цветы': 'flowers',
+      'дерево': 'tree', 'деревья': 'trees',
+      'роза': 'rose', 'розы': 'roses',
+      
+      // Цвета
+      'красный': 'red', 'красная': 'red', 'красное': 'red',
+      'синий': 'blue', 'синяя': 'blue', 'синее': 'blue',
+      'зеленый': 'green', 'зеленая': 'green', 'зеленое': 'green',
+      'желтый': 'yellow', 'желтая': 'yellow', 'желтое': 'yellow',
+      'черный': 'black', 'черная': 'black', 'черное': 'black',
+      'белый': 'white', 'белая': 'white', 'белое': 'white',
+      'розовый': 'pink', 'розовая': 'pink', 'розовое': 'pink',
+      'фиолетовый': 'purple', 'фиолетовая': 'purple',
+      
+      // Стили и характеристики
+      'красивый': 'beautiful', 'красивая': 'beautiful', 'красивое': 'beautiful',
+      'большой': 'large', 'большая': 'large', 'большое': 'large',
+      'маленький': 'small', 'маленькая': 'small', 'маленькое': 'small',
+      'яркий': 'bright', 'яркая': 'bright', 'яркое': 'bright',
+      'темный': 'dark', 'темная': 'dark', 'темное': 'dark',
+      'реалистичный': 'realistic', 'реалистичная': 'realistic',
+      'мультяшный': 'cartoon style', 'мультипликационный': 'animated style',
+      
+      // Места и окружение
+      'лес': 'forest', 'в лесу': 'in forest',
+      'море': 'ocean', 'у моря': 'by the ocean',
+      'горы': 'mountains', 'в горах': 'in mountains',
+      'город': 'city', 'в городе': 'in city',
+      'космос': 'space', 'в космосе': 'in space',
+      'небо': 'sky', 'облака': 'clouds',
+      
+      // Техника и предметы
+      'принт': 'print design', 'дизайн': 'design',
+      'футболка': 't-shirt', 'одежда': 'clothing',
+      'логотип': 'logo', 'эмблема': 'emblem',
+      'сапоги': 'boots', 'в сапогах': 'wearing boots',
+      
+      // Действия и состояния
+      'стоит': 'standing', 'сидит': 'sitting',
+      'летит': 'flying', 'бежит': 'running',
+      'улыбается': 'smiling', 'грустный': 'sad',
+      
+      // Качество и детали
+      'детально': 'detailed', 'детальный': 'highly detailed',
+      'качественно': 'high quality', 'профессионально': 'professional',
+      'четко': 'sharp', 'четкий': 'sharp and clear'
+    };
+    
+    let translated = prompt;
+    
+    // Переводим по словарю (сначала длинные фразы, потом короткие)
+    const sortedTranslations = Object.entries(translations)
+      .sort(([a], [b]) => b.length - a.length);
+    
+    for (const [russian, english] of sortedTranslations) {
+      const regex = new RegExp(`\\b${russian}\\b`, 'gi');
+      translated = translated.replace(regex, english);
+    }
+    
+    SmartLogger.execute(`Промпт переведен: "${translated}"`);
+    return translated;
+  },
 
-Создай детальный промпт на английском языке для AI генератора изображений. Добавь детали о:
-- Стиле и качестве
-- Освещении и композиции
-- Цветах и настроении
-- Технических параметрах
+  /**
+   * Добавление технических деталей и улучшений
+   */
+  addEnhancements(prompt, style = 'realistic') {
+    SmartLogger.execute(`Добавление улучшений к промпту, стиль: ${style}`);
+    
+    let enhanced = prompt;
+    
+    // Базовые улучшения качества
+    const qualityEnhancements = [
+      'high quality', 'detailed', 'sharp focus', 'well-lit'
+    ];
+    
+    // Стилевые улучшения в зависимости от типа
+    const styleEnhancements = {
+      realistic: [
+        'photorealistic', 'hyperrealistic', 'professional photography',
+        'studio lighting', 'natural colors', 'lifelike details'
+      ],
+      cartoon: [
+        'cartoon style', 'animated', 'colorful', 'clean lines',
+        'vibrant colors', 'stylized'
+      ],
+      artistic: [
+        'artistic', 'creative', 'expressive', 'aesthetic',
+        'beautiful composition', 'artistic lighting'
+      ],
+      print: [
+        'vector style', 'clean lines', 'bold colors', 
+        'print-ready', 'high contrast', 'simple shapes'
+      ]
+    };
+    
+    // Определяем стиль на основе содержимого
+    let detectedStyle = style;
+    if (prompt.includes('print') || prompt.includes('t-shirt') || prompt.includes('logo')) {
+      detectedStyle = 'print';
+    } else if (prompt.includes('cartoon') || prompt.includes('animated')) {
+      detectedStyle = 'cartoon';
+    } else if (prompt.includes('art') || prompt.includes('creative')) {
+      detectedStyle = 'artistic';
+    }
+    
+    // Добавляем улучшения
+    const selectedEnhancements = [
+      ...qualityEnhancements,
+      ...(styleEnhancements[detectedStyle] || styleEnhancements.realistic)
+    ];
+    
+    // Проверяем, что улучшения еще не добавлены
+    const missingEnhancements = selectedEnhancements.filter(enhancement => 
+      !enhanced.toLowerCase().includes(enhancement.toLowerCase())
+    );
+    
+    if (missingEnhancements.length > 0) {
+      enhanced = `${enhanced}, ${missingEnhancements.slice(0, 4).join(', ')}`;
+    }
+    
+    SmartLogger.execute(`Промпт улучшен: "${enhanced.substring(0, 100)}..."`);
+    return enhanced;
+  },
 
-Ответь только улучшенным промптом без пояснений.`;
+  /**
+   * Полная обработка промпта
+   */
+  async enhancePrompt(userQuery, style = 'realistic') {
+    SmartLogger.execute(`=== НАЧАЛО УЛУЧШЕНИЯ ПРОМПТА ===`);
+    SmartLogger.execute(`Исходный запрос: "${userQuery}"`);
+    
+    try {
+      // Шаг 1: Очистка
+      let processed = this.cleanPrompt(userQuery);
+      
+      // Шаг 2: Перевод
+      processed = this.translateToEnglish(processed);
+      
+      // Шаг 3: Добавление деталей
+      processed = this.addEnhancements(processed, style);
+      
+      // Шаг 4: AI-оптимизация (если доступна)
+      try {
+        const aiOptimized = await this.getAIOptimization(processed, style);
+        if (aiOptimized && aiOptimized.length > processed.length) {
+          processed = aiOptimized;
+          SmartLogger.execute(`AI оптимизация применена`);
+        }
+      } catch (aiError) {
+        SmartLogger.execute(`AI оптимизация недоступна: ${aiError.message}`);
+      }
+      
+      // Финальная очистка
+      processed = processed.replace(/\s+/g, ' ').trim();
+      processed = processed.replace(/,+/g, ',');
+      processed = processed.replace(/^,|,$/, '');
+      
+      SmartLogger.execute(`=== ПРОМПТ УЛУЧШЕН ===`);
+      SmartLogger.execute(`Финальный результат: "${processed}"`);
+      
+      return processed;
+    } catch (error) {
+      SmartLogger.execute(`Ошибка улучшения промпта: ${error.message}`);
+      return userQuery; // Возвращаем оригинал при ошибке
+    }
+  },
+
+  /**
+   * AI-оптимизация промпта (опциональная)
+   */
+  async getAIOptimization(prompt, style) {
+    const optimizationPrompt = `Improve this image generation prompt for ${style} style:
+
+"${prompt}"
+
+Make it more detailed and specific for AI image generation. Focus on:
+- Visual composition and framing
+- Lighting and atmosphere  
+- Colors and mood
+- Technical quality
+
+Return only the improved prompt, no explanations.`;
 
     const g4fProvider = require('./g4f-provider.js');
     const result = await g4fProvider.generateResponse(optimizationPrompt, {
@@ -1006,14 +1272,26 @@ async function optimizeImagePrompt(userQuery) {
     });
     
     if (result.success && result.response) {
-      SmartLogger.execute(`Промпт оптимизирован: ${result.response.substring(0, 100)}...`);
       return result.response.trim();
     }
+    
+    throw new Error('AI optimization failed');
+  }
+};
+
+/**
+ * Оптимизация промпта для генерации изображений
+ */
+async function optimizeImagePrompt(userQuery) {
+  try {
+    // Используем новую систему улучшения промптов
+    const enhanced = await promptEnhancer.enhancePrompt(userQuery, 'realistic');
+    SmartLogger.execute(`Промпт оптимизирован: ${enhanced.substring(0, 100)}...`);
+    return enhanced;
   } catch (error) {
     SmartLogger.execute(`Ошибка оптимизации промпта: ${error.message}`);
+    return userQuery;
   }
-  
-  return userQuery;
 }
 
 /**
