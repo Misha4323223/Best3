@@ -724,7 +724,7 @@ async function getAIResponseWithSearch(userQuery, options = {}) {
                 });
               }
               // Анализ цветов
-              if (optimization.advanced.analysis) {
+              if (optimization.advanced.analysis){
                 const analysis = optimization.advanced.analysis;
                 response += `\n\n📊 **Анализ цветов:**`;
                 response += `\n• Доминирующий цвет: ${analysis.dominant}`;
@@ -2428,6 +2428,99 @@ async function getResponseFromProviders(message, analysis, options = {}) {
     category,
     providers
   };
+}
+
+/**
+ * Попытка получить ответ от конкретного провайдера
+ * @param {string} providerName - Имя провайдера
+ * @param {string} message - Сообщение пользователя
+ * @param {Object} options - Дополнительные параметры
+ */
+async function trySpecificProvider(providerName, message, options = {}) {
+  try {
+    console.log(`Пробуем конкретный провайдер: ${providerName}...`);
+
+    let result;
+
+    // Достаем историю разговоров
+    let conversationHistory = '';
+		if (options.userId) {
+			const conversationMemory = require('./conversation-memory');
+			conversationHistory = await conversationMemory.getConversationHistory(options.userId, 5);
+		}
+
+    if (providerName === "DeepSpeek") {
+      // Для DeepSpeek используем специальный провайдер
+      result = await deepspeekProvider.getDeepSpeekResponse(message);
+    } else if (providerName === "Claude") {
+      // Для Claude используем Anthropic через Python G4F
+      result = await claudeProvider.getClaudeResponse(message, {
+        promptType: 'general',
+        systemPrompt: "Вы полезный ассистент."
+      });
+    } else if (providerName.startsWith("DeepInfra")) {
+      // Для DeepInfra используем специальный провайдер
+      result = await deepInfraProvider.getDeepInfraResponse(message, {
+        model: providerName.replace("DeepInfra_", "").toLowerCase(),
+        promptType: 'general'
+      });
+    } else {
+      const pythonResponse = await pythonProviderRoutes.callPythonAI(
+        message, 
+        providerName,
+        "Вы полезный ассистент. Отвечайте точно и по существу."
+      );
+
+      if (pythonResponse) {
+        result = {
+          success: true,
+          response: pythonResponse,
+          provider: providerName
+        };
+      } else {
+        throw new Error(`Провайдер ${providerName} не вернул ответ`);
+      }
+    }
+
+    if (result && result.success) {
+			let aiResponse = result.response;
+			//return result;
+
+      // Улучшаем качество ответа
+    try {
+      const ResponseQualityEnhancer = require('./response-quality-enhancer.js');
+      const enhancer = new ResponseQualityEnhancer();
+
+      const enhancedResponse = await enhancer.enhanceResponse(aiResponse, {
+        userQuery: message,
+        provider: result.provider,
+        context: conversationHistory
+      });
+
+      return {
+        success: true,
+        response: enhancedResponse,
+        provider: result.provider || 'Python_G4F_Enhanced',
+        searchUsed: false,
+        qualityEnhanced: true
+      };
+    } catch (enhanceError) {
+      console.log('Quality enhancement failed, using original response');
+      return {
+        success: true,
+        response: aiResponse,
+        provider: result.provider || 'Python_G4F',
+        searchUsed: false
+      };
+    }
+    }
+  } catch (error) {
+    console.error(`Ошибка при использовании провайдера ${providerName}: ${error.message}`);
+    return {
+      success: false,
+      error: `Ошибка при использовании провайдера ${providerName}: ${error.message}`
+    };
+  }
 }
 
 // API маршрут для обработки сообщений
