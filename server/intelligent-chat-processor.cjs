@@ -956,6 +956,351 @@ async function analyzeAndExecute(userQuery, options = {}) {
   }
 }
 
+/**
+ * Анализ намерений пользователя с учетом контекста
+ */
+async function analyzeUserIntent(userQuery, options = {}) {
+  const startTime = Date.now();
+  SmartLogger.brain(`Анализирую намерения для: "${userQuery}"`);
+
+  const sessionId = options.sessionId || 'default';
+  const conversationContext = options.conversationContext || {};
+
+  // Получаем контекст действий из памяти
+  const actionContext = actionMemory.getActionContext();
+  SmartLogger.brain('Контекст действий:', actionContext);
+
+  // Анализируем грамматику запроса
+  const grammar = analyzeGrammar(userQuery);
+  SmartLogger.grammar('Грамматический анализ:', grammar);
+
+  // Анализируем эмоциональное состояние
+  const emotional = emotionalAnalyzer.analyzeEmotion(userQuery);
+  SmartLogger.emotion('Эмоциональный анализ:', emotional);
+
+  // Проверяем команды памяти
+  const memoryCommandResult = checkMemoryCommands(userQuery);
+  if (memoryCommandResult.isMemoryCommand) {
+    return {
+      category: 'memory_command',
+      confidence: 95,
+      command: memoryCommandResult.command,
+      params: memoryCommandResult.params,
+      grammar,
+      emotional,
+      context: actionContext,
+      smartThreshold: 80,
+      processingTime: Date.now() - startTime
+    };
+  }
+
+  // Анализ контекста создания
+  const creationContext = analyzeCreationContext(userQuery);
+  SmartLogger.brain('Контекст создания:', creationContext);
+
+  // Определяем категорию на основе анализа
+  let category = 'general';
+  let confidence = 0;
+
+  // Проверка на генерацию изображений
+  if (creationContext.isCreationIntent && creationContext.type === 'visual') {
+    category = 'image_generation';
+    confidence = creationContext.confidence;
+  }
+  // Проверка на веб-поиск
+  else if (needsWebSearch(userQuery)) {
+    category = 'web_search';
+    confidence = 75;
+  }
+  // Проверка на вопросы о прошлых действиях
+  else if (grammar.isQuestion && grammar.tense === 'past') {
+    if (actionContext.hasRecentImage) {
+      category = 'action_inquiry';
+      confidence = 80;
+    } else {
+      category = 'general_inquiry';
+      confidence = 40;
+    }
+  }
+
+  // Вычисляем умный порог
+  const smartThreshold = calculateSmartThreshold(grammar, actionContext, category);
+
+  const result = {
+    category,
+    confidence,
+    grammar,
+    emotional,
+    context: actionContext,
+    creationContext,
+    conversationContext,
+    smartThreshold,
+    processingTime: Date.now() - startTime
+  };
+
+  SmartLogger.brain(`Результат анализа намерений:`, result);
+  return result;
+}
+
+/**
+ * Создание плана действий на основе намерений
+ */
+async function createActionPlan(intent, options = {}) {
+  SmartLogger.plan(`Создаю план для категории: ${intent.category}`);
+
+  const plan = {
+    category: intent.category,
+    confidence: intent.confidence,
+    shouldExecute: intent.confidence >= intent.smartThreshold,
+    description: 'Общий план действий',
+    grammar: intent.grammar,
+    context: intent.context,
+    emotional: intent.emotional
+  };
+
+  switch (intent.category) {
+    case 'image_generation':
+      plan.description = 'Генерация изображения через AI';
+      plan.service = 'ai-image-generator';
+      break;
+
+    case 'web_search':
+      plan.description = 'Поиск актуальной информации в интернете';
+      plan.service = 'web-search-provider';
+      break;
+
+    case 'action_inquiry':
+      plan.description = 'Ответ на вопрос о последних действиях';
+      plan.service = 'action-memory';
+      break;
+
+    case 'memory_command':
+      plan.description = 'Выполнение команды управления памятью';
+      plan.service = 'session-memory';
+      plan.command = intent.command;
+      plan.params = intent.params;
+      plan.shouldExecute = true; // Команды памяти всегда выполняются
+      break;
+
+    default:
+      plan.description = 'Стандартная обработка через AI';
+      plan.service = 'standard-ai';
+      break;
+  }
+
+  SmartLogger.plan(`План создан:`, plan);
+  return plan;
+}
+
+/**
+ * Выполнение плана действий
+ */
+async function executePlan(plan, userQuery, options = {}) {
+  SmartLogger.execute(`Выполняю план: ${plan.description}`);
+
+  try {
+    let result = { success: false, shouldFallback: true };
+
+    switch (plan.service) {
+      case 'ai-image-generator':
+        result = await executeImageGeneration(userQuery, options);
+        break;
+
+      case 'web-search-provider':
+        result = await executeWebSearch(userQuery, options);
+        break;
+
+      case 'action-memory':
+        result = await executeActionInquiry(userQuery, plan.context);
+        break;
+
+      case 'session-memory':
+        result = await executeMemoryCommand(plan, userQuery, options);
+        break;
+
+      default:
+        result = { success: false, shouldFallback: true };
+        break;
+    }
+
+    // Сохраняем выполненное действие в памяти
+    if (result.success) {
+      actionMemory.saveAction({
+        category: plan.category,
+        description: plan.description,
+        userQuery,
+        result: result.response ? result.response.substring(0, 100) : 'success'
+      });
+    }
+
+    return result;
+
+  } catch (error) {
+    SmartLogger.execute(`Ошибка выполнения плана: ${error.message}`);
+    return { success: false, shouldFallback: true, error: error.message };
+  }
+}
+
+/**
+ * Выполнение команды памяти
+ */
+async function executeMemoryCommandPlan(plan, userQuery, options = {}) {
+  const sessionId = options.sessionId || 'default';
+  const response = sessionMemory.processMemoryCommand(sessionId, plan.command, plan.params);
+
+  return {
+    success: true,
+    response: response,
+    provider: 'SessionMemory',
+    category: 'memory_command'
+  };
+}
+
+/**
+ * Проверка команд управления памятью
+ */
+function checkMemoryCommands(query) {
+  const lowerQuery = query.toLowerCase().trim();
+
+  // Паттерны команд памяти
+  const memoryPatterns = [
+    { pattern: /^set\s*user\s*name\s+(.+)$/i, command: 'setUserName', extract: 1 },
+    { pattern: /^add\s*goal\s+(.+)$/i, command: 'addGoal', extract: 1 },
+    { pattern: /^remember\s*topic\s+(.+)$/i, command: 'rememberTopic', extract: 1 },
+    { pattern: /^show\s*memory$/i, command: 'showMemory', extract: 0 },
+    { pattern: /^clear\s*memory$/i, command: 'clearMemory', extract: 0 }
+  ];
+
+  for (const { pattern, command, extract } of memoryPatterns) {
+    const match = lowerQuery.match(pattern);
+    if (match) {
+      const params = extract > 0 ? [match[extract]] : [];
+      return {
+        isMemoryCommand: true,
+        command,
+        params
+      };
+    }
+  }
+
+  return { isMemoryCommand: false };
+}
+
+/**
+ * Проверка необходимости веб-поиска
+ */
+function needsWebSearch(query) {
+  const searchKeywords = [
+    'найди', 'поищи', 'найти', 'поиск', 'новости', 'последние',
+    'актуальные', 'свежие', 'что происходит', 'что случилось',
+    'курс', 'цена', 'стоимость', 'погода', 'информация о'
+  ];
+
+  const lowerQuery = query.toLowerCase();
+  return searchKeywords.some(keyword => lowerQuery.includes(keyword));
+}
+
+/**
+ * Выполнение генерации изображения
+ */
+async function executeImageGeneration(userQuery, options = {}) {
+  try {
+    const aiImageGenerator = require('./ai-image-generator');
+    const result = await aiImageGenerator.generateImage(userQuery, 'realistic');
+
+    if (result.success && result.imageUrl) {
+      return {
+        success: true,
+        response: `Я создал изображение по вашему запросу! Вот результат:\n\n![Сгенерированное изображение](${result.imageUrl})\n\nИзображение сохранено и готово к использованию.`,
+        provider: 'AI_Image_Generator',
+        imageUrl: result.imageUrl,
+        category: 'image_generation'
+      };
+    }
+
+    return { success: false, shouldFallback: true };
+  } catch (error) {
+    return { success: false, shouldFallback: true, error: error.message };
+  }
+}
+
+/**
+ * Выполнение веб-поиска
+ */
+async function executeWebSearch(userQuery, options = {}) {
+  try {
+    const webSearchProvider = require('./web-search-provider');
+    const searchResults = await webSearchProvider.performWebSearch(userQuery);
+
+    if (searchResults.success && searchResults.results.length > 0) {
+      const formattedResponse = `🔍 **Найдена актуальная информация:**\n\n${searchResults.results.slice(0, 5).map((r, i) => 
+        `**${i + 1}. ${r.title}**\n${r.snippet}\n🔗 [Источник](${r.url})\n`
+      ).join('\n')}📊 **Всего найдено:** ${searchResults.results.length}`;
+
+      return {
+        success: true,
+        response: formattedResponse,
+        provider: 'WebSearch',
+        category: 'web_search',
+        searchResults: searchResults.results
+      };
+    }
+
+    return { success: false, shouldFallback: true };
+  } catch (error) {
+    return { success: false, shouldFallback: true, error: error.message };
+  }
+}
+
+/**
+ * Ответ на вопросы о действиях
+ */
+async function executeActionInquiry(userQuery, actionContext) {
+  if (actionContext.hasRecentImage) {
+    const lastImage = actionMemory.getLastImage();
+    const timeAgo = Math.round((Date.now() - lastImage.timestamp) / (1000 * 60));
+
+    return {
+      success: true,
+      response: `Недавно я создал изображение (${timeAgo} минут назад). Оно было сгенерировано по запросу пользователя и сохранено для использования.`,
+      provider: 'ActionMemory',
+      category: 'action_inquiry'
+    };
+  }
+
+  if (actionContext.totalActions > 0) {
+    const lastAction = actionMemory.getLastAction();
+    return {
+      success: true,
+      response: `Последнее действие: ${lastAction.description} (категория: ${lastAction.category})`,
+      provider: 'ActionMemory',
+      category: 'action_inquiry'
+    };
+  }
+
+  return {
+    success: true,
+    response: 'В этой сессии я пока не выполнял значимых действий.',
+    provider: 'ActionMemory',
+    category: 'action_inquiry'
+  };
+}
+
+/**
+ * Выполнение команды памяти
+ */
+async function executeMemoryCommand(plan, userQuery, options = {}) {
+  const sessionId = options.sessionId || 'default';
+  const response = sessionMemory.processMemoryCommand(sessionId, plan.command, plan.params);
+
+  return {
+    success: true,
+    response: response,
+    provider: 'SessionMemory',
+    category: 'memory_command'
+  };
+}
+
 module.exports = {
   analyzeAndExecute,
   analyzeUserIntent,
