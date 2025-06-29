@@ -1365,8 +1365,16 @@ async function executeWebSearchPlan(userQuery, options) {
   reasons.push(`Определил запрос "${userQuery}" как поисковый`);
   
   try {
-    const { default: webSearchProvider } = await withTimeout(
-      import('./web-search-provider.js'),
+    const webSearchProvider = await withTimeout(
+      (async () => {
+        try {
+          return require('./web-search-provider.js');
+        } catch (err) {
+          // Fallback для ES модулей
+          const module = await import('./web-search-provider.js');
+          return module.default || module;
+        }
+      })(),
       5000, // 5 секунд для импорта
       'Импорт модуля веб-поиска'
     );
@@ -1975,11 +1983,13 @@ ${userContext}
 
     reasons.push('Отправляю запрос к AI модели Qwen_Qwen_2_72B для генерации ответа');
 
-    const g4fProvider = await import('./g4f-provider.js');
+    const g4fProvider = require('./g4f-provider.js');
     const result = await withTimeout(
       g4fProvider.generateResponse(conversationPrompt, {
         provider: 'Qwen_Qwen_2_72B',
-        max_tokens: 250
+        max_tokens: 250,
+        temperature: 0.7,
+        fallback: true // Включаем резервные провайдеры
       }),
       15000, // 15 секунд для генерации ответа в разговоре
       'G4F генерация ответа для разговора'
