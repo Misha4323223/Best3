@@ -4,17 +4,6 @@ channel = "stable-24_05"
 packages = ["antlr", "cairo", "ffmpeg-full", "freetype", "giflib", "jre", "lcms2", "libGL", "libGLU", "libimagequant", "libjpeg", "libjpeg_turbo", "libpng", "librsvg", "libtiff", "libuuid", "libwebp", "libxcrypt", "openjpeg", "pango", "pkg-config", "potrace", "tcl", "tk", "which", "xcodebuild", "zlib"]
 
 [[ports]]
-localPort = 3000
-externalPort = 3003
-
-[[ports]]
-localPort = 3001
-externalPort = 3002
-
-[[ports]]
-localPort = 3005
-
-[[ports]]
 localPort = 5000
 externalPort = 80
 
